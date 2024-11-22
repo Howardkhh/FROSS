@@ -1,0 +1,24 @@
+__include__: [
+  ./coco_detection.yml,
+]
+
+
+evaluator:
+  is_vg: True
+
+num_classes: 150
+remap_mscoco_category: False
+
+
+train_dataloader: 
+  dataset: 
+    img_folder: ./Datasets/visual_genome/images
+    ann_file: ./Datasets/visual_genome/train.json
+    is_vg: True
+
+
+val_dataloader:
+  dataset: 
+    img_folder: ./Datasets/visual_genome/images
+    ann_file: ./Datasets/visual_genome/val.json
+    is_vg: True

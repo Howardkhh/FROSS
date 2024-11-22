@@ -1,0 +1,18 @@
+__include__: [
+  ./vg_detection.yml,
+]
+
+
+num_classes: 160
+
+
+train_dataloader: 
+  dataset: 
+    img_folder: ./Datasets/3RScan/ObjectDetection160/images/train
+    ann_file: ./Datasets/3RScan/ObjectDetection160/coco/train.json
+
+
+val_dataloader:
+  dataset: 
+    img_folder: ./Datasets/3RScan/ObjectDetection160/images/val
+    ann_file: ./Datasets/3RScan/ObjectDetection160/coco/val.json

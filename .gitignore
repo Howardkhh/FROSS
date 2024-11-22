@@ -1,0 +1,11 @@
+3RScan.py
+3RScan
+Datasets
+weights
+logs
+.venv
+**/visualization/
+**/__pycache__
+**/debug
+**/temp
+**/output

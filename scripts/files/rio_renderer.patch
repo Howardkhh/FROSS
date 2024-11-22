@@ -1,0 +1,31 @@
+diff --git a/c++/rio_renderer/CMakeLists.txt b/c++/rio_renderer/CMakeLists.txt
+index e6b2087..e69050c 100644
+--- a/c++/rio_renderer/CMakeLists.txt
++++ b/c++/rio_renderer/CMakeLists.txt
+@@ -21,7 +21,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE include
+ 					${OPENGL_INCLUDE_DIR}
+ 					${OpenCV_INCLUDE_DIRS}
+ 					${GLFW_INCLUDE_DIRS}
+-					${GLEW_INCLUDE_PATH}
++					${GLEW_INCLUDE_DIRS}
+ 					${assimp_INCLUDE_DIRS})
+ 
+ target_include_directories(${PROJECT_NAME}_render_all PRIVATE include
+@@ -29,12 +29,12 @@ target_include_directories(${PROJECT_NAME}_render_all PRIVATE include
+ 					${OPENGL_INCLUDE_DIR}
+ 					${OpenCV_INCLUDE_DIRS}
+ 					${GLFW_INCLUDE_DIRS}
+-					${GLEW_INCLUDE_PATH}
++					${GLEW_INCLUDE_DIRS}
+ 					${assimp_INCLUDE_DIRS})
+ 
+ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES)
+ target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${OPENGL_LIBRARIES}
+-									${GLFW_LIBRARIES} ${GLEW_LIBRARY} ${assimp_LIBRARIES})
++									${GLFW_LIBRARIES} ${GLEW_LIBRARIES} ${assimp_LIBRARIES})
+ 
+ target_link_libraries(${PROJECT_NAME}_render_all ${OpenCV_LIBS} ${OPENGL_LIBRARIES}
+-									${GLFW_LIBRARIES} ${GLEW_LIBRARY} ${assimp_LIBRARIES})
+\ No newline at end of file
++									${GLFW_LIBRARIES} ${GLEW_LIBRARIES} ${assimp_LIBRARIES})
+\ No newline at end of file
