@@ -79,6 +79,7 @@ def evaluate(
                 (index, name, BasicSceneGraphEvaluator.all_modes(multiple_preds=False))
             )
 
+    final_targets, final_outputs = [], []
     for batch in tqdm(dataloader):
         assert len(batch["pixel_values"]) == 1, "Currently only supports batch size 1"
         outputs = model(
@@ -103,13 +104,18 @@ def evaluate(
             results = feature_extractor.post_process(
                 outputs, orig_target_sizes.cuda()
             )  # convert outputs of model to COCO api
-            res = {
-                target["image_id"].item(): output
-                for target, output in zip(targets, results)
-            }
-            coco_evaluator.update(res)
+            assert len(targets) == len(results) == 1
+            # res = {
+            #     target["image_id"].item(): output
+            #     for target, output in zip(targets, results)
+            # }
+            final_targets.append(targets[0]["image_id"].item())
+            final_outputs.append(results[0])
 
     if coco_evaluator is not None:
+        # res[targets[0]["image_id"].item()] = results[0]
+        res = {id: output for id, output in zip(final_targets, final_outputs)}
+        coco_evaluator.update(res)
         coco_evaluator.synchronize_between_processes()
         coco_evaluator.accumulate()
         coco_evaluator.summarize()

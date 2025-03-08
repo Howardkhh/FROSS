@@ -138,23 +138,31 @@ cd Merging
 # 3RScan dataset
 python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0 --dataset_path ../Datasets/3RScan
 # With ground truth 2D scene graph
-python main.py --dataset_path ../Datasets/3RScan --gt_2dsg
+python main.py --dataset_path ../Datasets/3RScan --use_gt_sg
+# With SLAM trajectory
+python main.py --dataset_path ../Datasets/3RScan --not_use_gt_pose
 
 # ReplicaSSG dataset
-python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica --kf_interval 10 --kf_iou_thresh 0.2
+python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica
 # With ground truth 2D scene graph
-python main.py --dataset_path ../Datasets/Replica --gt_2dsg --kf_interval 10 --kf_iou_thresh 0.2
+python main.py --dataset_path ../Datasets/Replica --label_categories replica --use_gt_sg
+# With SLAM trajectory
+python main.py --dataset_path ../Datasets/Replica --label_categories replica --not_use_gt_pose
 ```
 
 ## Evaluate FROSS
 ```bash
 # 3RScan dataset
-python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfint1_kfiouNone_test.pkl
+python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl
 # With ground truth 2D scene graph
-python evaluate.py --dataset_path ../Datasets/Replica/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfint1_kfiouNone_test_gt.pkl
+python evaluate.py --dataset_path ../Datasets/Replica/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
+# With SLAM trajectory
+python evaluate.py --dataset_path ../Datasets/Replica/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
 
 # ReplicaSSG dataset
-python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfint10_kfiou0.2_test.pkl
+python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl
 # With ground truth 2D scene graph
-python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfint10_kfiou0.2_test_gt.pkl
+python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
+# With SLAM trajectory
+python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
 ```

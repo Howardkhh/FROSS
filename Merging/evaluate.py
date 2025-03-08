@@ -6,9 +6,7 @@ import numpy as np
 from plyfile import PlyData
 from scipy.spatial import KDTree
 from tqdm import tqdm
-
-np.set_printoptions(linewidth=200, suppress=True)
-
+import os
 
 def main(args):
     split = args.split
@@ -83,7 +81,9 @@ def main(args):
             scan2obj_rel[scan["scan"]]["rel_cls"].append([cls_idx])
 
     ks = [1]
-    topk = {"object": [], "relationship": []}
+    topk = {"object": [], "relationship": [], "predicate": [], 
+            "object_per_class": {c: [] for c in range(len(class_mapping[OBJ_CLASS_NAME]))},
+            "predicate_per_class": {c: [] for c in range(len(class_mapping[REL_CLASS_NAME]))}}
     for scan_id in tqdm(scan_ids):
         node_gt = np.array(scan2obj_rel[scan_id]["obj_cls"]) # node_gt: clsIdx
         edge_gt = np.array(scan2obj_rel[scan_id]["rel_cls"]) # node_gt to node_gt: clsIdx
@@ -125,42 +125,6 @@ def main(args):
                 if overlap_count[gt_idx, max_pred_idx] == 0:
                     continue
                 gt2pred[1, gt_idx] = max_pred_idx
-            # print(scan_id)
-            # print(overlap_count)
-            # print([len(seg) for seg in pred["pcd"]])
-            # print(gt2pred)
-            # print(np.count_nonzero(gt2pred[1] >= 0) / len(node_gt))
-            # if scan_id == "7272e17c-a01b-20f6-8b2f-e659331ae41a":
-            #     print(gt_points.shape)
-            #     points = []
-            #     colors = np.random.randint(0, 255, (len(np.unique(gt_point_ids)), 3))
-            #     for gt_idx, seg in enumerate(gt_points):
-            #         points.append((*seg, *colors[OBJID2IDX[scan_id][gt_point_ids[gt_idx]]]))
-            #     points_np = np.array(points, dtype=[
-            #         ('x', 'f4'), ('y', 'f4'), ('z', 'f4'), 
-            #         ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
-            #     ])
-            #     PlyData([PlyElement.describe(points_np, 'vertex')]).write("7272e17c-a01b-20f6-8b2f-e659331ae41a_gt.ply")
-            #     print([len(seg) for seg in pred["pcd"]])
-            #     store pred segments to ply for visualization, each segment has its own color
-            #     pred["pcd"] is a list of segments, each segment is a list of points (x, y, z)
-                # points = []
-                # import random
-                # for pred_idx, seg in enumerate(pred["pcd"]):
-                #     if pred_idx not in gt2pred[1]: continue
-                #     r = random.randint(0, 255)
-                #     g = random.randint(0, 255)
-                #     b = random.randint(0, 255)
-                #     for point in seg:
-                #         points.append((*point, r, g, b))
-                # points_np = np.array(points, dtype=[
-                #     ('x', 'f4'), ('y', 'f4'), ('z', 'f4'), 
-                #     ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
-                # ])
-                # vis_ply_data = PlyData([PlyElement.describe(points_np, 'vertex')])
-                # vis_ply_data.write(f"debug/{scan_id}.ply")
-            #     exit()
-                
 
         node_pred = pred["cls"] # node: pd
 
@@ -175,22 +139,44 @@ def main(args):
                 pred_idx = gt2pred[1, i].item()
                 gt2pred_map[gt_idx] = pred_idx
 
-        
-        correct_count = 0
+        # object
         for i in range(len(node_gt)):
             gt_idx = gt2pred[0, i]
             pred_idx = gt2pred[1, i]
             if pred_idx < 0:
                 topk["object"].append(99999)
+                topk["object_per_class"][node_gt[gt_idx]].append(99999)
                 continue
             pred = node_pred[pred_idx]
             gt = node_gt[gt_idx]
             sorted_args = np.flip(np.argsort(pred, kind='stable'))
             index = np.nonzero(sorted_args == gt)[0].item()
             topk["object"].append(index)
-            if index == 0:
-                correct_count += 1
+            topk["object_per_class"][gt].append(index)
 
+        # predicate
+        for i in range(len(edge_gt)):
+            gt_rel = edge_gt[i]
+            if len(gt_rel) != 1: print(len(gt_rel))
+            gt_rel = gt_rel[0]
+            sub_idx_gt = edge_index_gt[i, 0].item()
+            obj_idx_gt = edge_index_gt[i, 1].item()
+            sub_idx_pred = gt2pred_map[sub_idx_gt]
+            obj_idx_pred = gt2pred_map[obj_idx_gt]
+
+            if [sub_idx_pred, obj_idx_pred] not in edge_index_pred_list:
+                topk["predicate"].append(99999)
+                topk["predicate_per_class"][gt_rel].append(99999)
+                continue
+            pred_idx = edge_index_pred_list.index([sub_idx_pred, obj_idx_pred])
+            pred_rel = edge_pred[pred_idx]
+
+            sorted_args = np.flip(np.argsort(pred_rel, kind='stable'))
+            index = np.nonzero(sorted_args == gt_rel)[0].item()
+            topk["predicate"].append(index)
+            topk["predicate_per_class"][gt_rel].append(index)
+
+        # relationship
         for i in range(len(edge_gt)):
             gt_rel = edge_gt[i]
             if len(gt_rel) != 1: print(len(gt_rel))
@@ -226,20 +212,75 @@ def main(args):
     if args.output_path is None:
         print("Object:")
         for k in ks:
-            print(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}")
-
+            print(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object']):.3f}")
+        print("-------------------------------------")
+        print("Predicate:")
+        for k in ks:
+            print(f"Recall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate']):.3f}")
+        print("-------------------------------------")
         print("Relationship:")
         for k in ks:
-            print(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}")
+            print(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship']):.3f}")
+        print("-------------------------------------")
+        # class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
+        # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
+        #     print(class_short[c], end="\t")
+        print("Object per class:")
+        # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
+        #     print(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}", end="\t")
+        print(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME]))]) / len(class_mapping[OBJ_CLASS_NAME]):.3f}")
+        print("-------------------------------------")
+        # predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
+        # for c in range(len(class_mapping[REL_CLASS_NAME])):
+        #     print(predicate_short[c], end="\t")
+        print("Predicate per class:")
+        for c in range(len(class_mapping[REL_CLASS_NAME])):
+            print(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}", end="\t\t")
+        print(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME]))]) / len(class_mapping[REL_CLASS_NAME]):.3f}")
     else:
-        with open(args.output_path, 'w') as f:
+        os.makedirs(args.output_path.parent, exist_ok=True)
+        with open(args.output_path, 'a') as f:
+            f.write("\n")
+            f.write(f"Evaluation threshold: {args.eval_overlap_threshold}\n")
             f.write("Object: ")
             for k in ks:
                 f.write(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}\n")
 
+            f.write("Predicate: ")
+            for k in ks:
+                f.write(f"Recall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate'])}\n")
+
             f.write("Relationship: ")
             for k in ks:
                 f.write(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}\n")
+            
+            f.write("------------------------\n")
+            # class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
+            f.write("Object per class:\n")
+            # for c in range(len(class_short)):
+            #     f.write(class_short[c])
+            #     f.write("\t")
+            # f.write("avg.\n")
+            # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
+                # if len(topk['object_per_class'][c]) == 0: continue
+                # f.write(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}")
+                # f.write("\t")
+            f.write(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME])) if len(topk['object_per_class'][c]) > 0]) / sum([1 for c in topk['object_per_class'] if len(topk['object_per_class'][c]) > 0]):.3f}\n")
+
+            # predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
+            f.write("Predicate per class:\n")
+            # for c in range(len(predicate_short)):
+            #     f.write(predicate_short[c])
+            #     f.write("\t")
+            # f.write("avg.\n")
+            # for c in range(len(class_mapping[REL_CLASS_NAME])):
+            #     if len(topk['predicate_per_class'][c]) == 0: continue
+            #     print(class_mapping[REL_CLASS_NAME][c])
+            #     f.write(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}")
+            #     f.write("\t\t")
+            f.write(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME])) if len(topk['predicate_per_class'][c]) > 0]) / sum([1 for c in topk['predicate_per_class'] if len(topk['predicate_per_class'][c]) > 0]):.3f}\n")
+            f.write("------------------------\n")
+            
 
 if __name__ == "__main__":
     args = ArgumentParser()

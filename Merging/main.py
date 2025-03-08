@@ -11,15 +11,34 @@ import torch
 from pycocotools.coco import COCO
 
 from sg_loader import SG_Loader, GT_SG_Loader
-from keyframe_selection import PeriodicKeyframeSelector, DynamicKeyframeSelector
+from keyframe_selection import PeriodicKeyframeSelector, SpatialKeyframeSelector, DynamicKeyframeSelector
 from sg_prediction import SG_Predictor
 from global_sg import GlobalSG_Gaussian
 
 
 def main(args):
 
-    print(f"Hyperparameters: Object threshold: {args.obj_thresh}, Relation topk: {args.rel_topk}, Hellinger threshold: {args.hellinger_threshold}, Keyframe interval: {args.kf_interval}, Keyframe COR threshold: {args.kf_iou_thresh}")
-    
+    print(f"Using dataset: {'3RScan' if args.label_categories == 'scannet' else 'ReplicaSSG'}, path: {args.dataset_path}")
+    print(f"Using split: {args.split}")
+    print("Hyperparameters:")
+    print(f"\tObject threshold: {args.obj_thresh}")
+    print(f"\tRelation topk: {args.rel_topk}")
+    print(f"\tHellinger threshold: {args.hellinger_threshold}")
+    if args.kf_strategy != "none":
+        print(f"\tKeyframe strategy: {args.kf_strategy}")
+    if args.kf_strategy == "periodic":
+        print(f"\tKeyframe interval: {args.kf_interval}")
+    elif args.kf_strategy == "spatial":
+        print(f"\tKeyframe translation threshold: {args.kf_translation}")
+        print(f"\tKeyframe rotation threshold: {args.kf_rotation}")
+    elif args.kf_strategy == "dynamic":
+        print(f"\tKeyframe translation threshold: {args.kf_translation}")
+        print(f"\tKeyframe rotation threshold: {args.kf_rotation}")
+        print(f"\tKeyframe IOU threshold: {args.kf_iou_thresh}")
+    print(f"Using ground truth scene graphs: {args.use_gt_sg}")
+    print(f"Using ground truth camera poses: {args.use_gt_pose}")
+    print(f"Saving results to: {args.output_path}")
+
     split = args.split
     if args.label_categories == "scannet":
         obj_ann_path = f"2DSG20/{split}.json"
@@ -29,7 +48,7 @@ def main(args):
         OBJ_CLASS_NAME = "ScanNet_list"
         REL_CLASS_NAME = "ScanNet_rel"
     elif args.label_categories == "replica":
-        assert split == "test", "Replica is only for testing"
+        assert split == "test" or split == "val", "Replica is only for testing"
         obj_ann_path = f"2DSG/test.json"
         rel_ann_path = f"2DSG/rel.json"
         SSG_path = f"ReplicaSSG"
@@ -73,10 +92,14 @@ def main(args):
         else:
             sg_loader = SG_Loader(scan_id, split, args)
 
-        if args.kf_iou_thresh == None:
+        if args.kf_strategy == "none":
+            keyframe_selector = PeriodicKeyframeSelector(1)
+        elif args.kf_strategy == "periodic":
             keyframe_selector = PeriodicKeyframeSelector(args.kf_interval)
-        else:
-            keyframe_selector = DynamicKeyframeSelector(args.kf_iou_thresh, args.kf_interval, len(obj_classes))
+        elif args.kf_strategy == "spatial":
+            keyframe_selector = SpatialKeyframeSelector(args.kf_translation, args.kf_rotation)
+        elif args.kf_strategy == "dynamic":
+            keyframe_selector = DynamicKeyframeSelector(args.kf_translation, args.kf_rotation, args.kf_iou_thresh, len(obj_classes))
 
         camera_intrinsics = sg_loader.color_intrinsic
 
@@ -91,7 +114,7 @@ def main(args):
                 obj_det_output, all_scores, classes, bboxes = sg_predictor.detect_objects(img)
                 obj_time += time.time() - start_time
 
-            if not keyframe_selector.is_keyframe(classes):
+            if not keyframe_selector.is_keyframe(camera_trans, camera_rot, classes):
                 continue
 
             if not args.use_gt_sg:
@@ -139,10 +162,16 @@ def main(args):
     obj_name = f"obj{args.obj_thresh}"
     rel_name = f"rel{args.rel_topk}"
     hell_name = f"hell{args.hellinger_threshold}"
-    kf_int_name = f"kfint{args.kf_interval}"
-    kf_iou_name = f"kfiou{args.kf_iou_thresh}" if args.kf_iou_thresh != None else "kfiouNone"
+    if args.kf_strategy == "none":
+        kf_name = "kfnone"
+    elif args.kf_strategy == "periodic":
+        kf_name = f"kfperiodic{args.kf_interval}"
+    elif args.kf_strategy == "spatial":
+        kf_name = f"kfspatial{args.kf_translation}_{args.kf_rotation}"
+    elif args.kf_strategy == "dynamic":
+        kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_int_name}_{kf_iou_name}_{args.split}{'_gt' if args.use_gt_sg else ''}.pkl"
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}.pkl"
     output_path = args.output_path / args.label_categories / output_filename
     with open(output_path, "wb") as f:
         pickle.dump(predictions, f)
@@ -157,6 +186,15 @@ def main(args):
     print(f"FPS: {frame_cnt / frame_time}")
     print(f"KF ratio: {kf_cnt / frame_cnt}")
 
+    os.makedirs(args.output_path / "results" / args.label_categories, exist_ok=True)
+    output_path = args.output_path / "results" / args.label_categories / output_filename
+    with open(output_path, "w") as f:
+        f.write(f"frames: {frame_cnt}, keyframes: {kf_cnt}\n")
+        f.write(f"Merge time per frame: {merge_time_per_frame}\n")
+        f.write(f"Object time per frame: {obj_time_per_frame}\n")
+        f.write(f"Relation time per frame: {rel_time_per_frame}\n")
+        f.write(f"FPS: {frame_cnt / frame_time}\n")
+        f.write(f"KF ratio: {kf_cnt / frame_cnt}\n")
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
@@ -165,13 +203,18 @@ if __name__ == "__main__":
     args.add_argument("--label_categories", type=str, choices=["scannet", "replica"], default="scannet")
     args.add_argument("--split", type=str, choices=["train", "val", "test"], default="test")
     args.add_argument("--use_gt_sg", action="store_true", default=False)
+    args.add_argument("--not_use_gt_pose", action="store_true", default=False)
     args.add_argument("--output_path", type=Path, default="output/")
     args.add_argument("--obj_thresh", type=float, default=0.7)
     args.add_argument("--rel_topk", type=int, default=10)
     args.add_argument("--hellinger_threshold", type=float, default=0.85)
-    args.add_argument("--kf_interval", type=int, default=1)
-    args.add_argument("--kf_iou_thresh", type=float, default=None)
+    args.add_argument("--kf_strategy", type=str, default="none", choices=["none", "periodic", "spatial", "dynamic"])
+    args.add_argument("--kf_interval", type=int, default=1, help="Periodic keyframe interval")
+    args.add_argument("--kf_translation", type=float, default=0.01, help="Spatial keyframe translation threshold in meters")
+    args.add_argument("--kf_rotation", type=float, default=0.017, help="Spatial keyframe rotation threshold in radians")
+    args.add_argument("--kf_iou_thresh", type=float, default=0.2, help="Dynamic keyframe IOU threshold")
     args = args.parse_args()
+    args.use_gt_pose = not args.not_use_gt_pose
 
     assert args.artifact_path is not None or args.use_gt_sg, "Artifact path is required when not using ground truth scene graphs"
 

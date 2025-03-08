@@ -59,8 +59,10 @@ class SG_Loader():
             self.depth_intrinsic.fx, self.depth_intrinsic.fy = self.depth_intrinsic.fy, self.depth_intrinsic.fx
             self.depth_intrinsic.cx, self.depth_intrinsic.cy = depth_h - self.depth_intrinsic.cy, self.depth_intrinsic.cx
 
-        pose_files = glob.glob(str(self.threerscan_path / scan_id / "sequence" / "*.pose.txt"))
-        pose_files.sort()
+        if args.use_gt_pose:
+            pose_files = sorted([f for f in glob.glob(str(self.threerscan_path / scan_id / "sequence" / "*.pose.txt")) if not f.endswith("slam.pose.txt")])
+        else:
+            pose_files = sorted([f for f in glob.glob(str(self.threerscan_path / scan_id / "sequence" / "*.slam.pose.txt"))])
         assert len(pose_files) == len(self.color_frame_names) == len(self.depth_frame_names), \
             f"Number of pose files ({len(pose_files)}), number of frames ({len(self.color_frame_names)}), and number of depth frames ({len(self.depth_frame_names)}) do not match"
 
