@@ -64,7 +64,7 @@ class SG_Predictor():
         pred_boxes[:, ::2] = pred_boxes[:, ::2] * ori_w
         pred_boxes[:, 1::2] = pred_boxes[:, 1::2] * ori_h
 
-        return obj_det_output, obj_scores, pred_classes.cpu().numpy(), pred_boxes.cpu().numpy().astype(int)
+        return obj_det_output, obj_scores, pred_classes.cpu().numpy(), pred_logits.softmax(-1).cpu().numpy(), pred_boxes.cpu().numpy().astype(int)
 
     def extract_relations(self, obj_det_output, obj_scores):
         rel_ext_output = self.model(obj_det_output=obj_det_output)

@@ -80,6 +80,7 @@ class SG_Loader():
         self.current_idx = 0
         self.sequnce_len = len(self.color_frame_names)
 
+        # Load images and depths beforehand to exclude them from the time measurement
         self.imgs = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1], 3), dtype=np.uint8)
         self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
         for idx in range(self.sequnce_len):
@@ -132,7 +133,6 @@ class GT_SG_Loader(SG_Loader):
         if self.current_idx >= self.sequnce_len:
             raise StopIteration
 
-        # img = self.imgs[self.current_idx]
         depth = self.depths[self.current_idx]
         
         assert f"{self.scan_id}-{self.current_idx:06d}.jpg" == f"{self.scan_id}-{self.color_frame_names[self.current_idx][6:12]}.jpg", \

@@ -9,6 +9,8 @@ from tqdm import tqdm
 import os
 
 def main(args):
+
+    # Load data and mappings
     split = args.split
     scan_split = "validation" if split == "val" else split
     if args.label_categories == "scannet":
@@ -31,18 +33,18 @@ def main(args):
     with open(Path(args.dataset_path) / scan_split_path, 'r') as f:
         scan_ids = f.readlines()
     with open(Path(args.dataset_path) / obj3d_ann_path, 'r') as f:
-        obj3d_ann = json.load(f)
+        obj3d_ann = json.load(f) # Object annotations
     with open(Path(args.dataset_path) / sg_ann_path, 'r') as f:
-        sg_ann = json.load(f)
+        sg_ann = json.load(f) # Relationship annotations
     with open(Path(args.dataset_path) / class_mapping_path, 'r') as f:
-        class_mapping = json.load(f)
+        class_mapping = json.load(f) # Class mapping (3DSSG 140 classes to ScanNet 20 classes, NYU 27 classes to ScanNet 20 classes)
     with open(args.prediction_path, 'rb') as f:
-        predictions = pickle.load(f)
+        predictions = pickle.load(f) # Predictions from the model
 
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
-    scan2obj_rel = {}
-    OBJID2IDX = {}
-    obj_in_rel = {}
+    scan2obj_rel = {} # Scan ID to object and relationship ground truth
+    OBJID2IDX = {} # Scan ID to {Obejct ID to index in scan2obj_rel}
+    obj_in_rel = {} # Scan ID to set of object IDs that are in relationships
 
     for scan in sg_ann["scans"]:
         if scan["scan"] not in scan_ids:
@@ -80,7 +82,7 @@ def main(args):
             scan2obj_rel[scan["scan"]]["rel_edge"].append((OBJID2IDX[scan["scan"]][s], OBJID2IDX[scan["scan"]][o]))
             scan2obj_rel[scan["scan"]]["rel_cls"].append([cls_idx])
 
-    ks = [1]
+    ks = [1] # Recall@k
     topk = {"object": [], "relationship": [], "predicate": [], 
             "object_per_class": {c: [] for c in range(len(class_mapping[OBJ_CLASS_NAME]))},
             "predicate_per_class": {c: [] for c in range(len(class_mapping[REL_CLASS_NAME]))}}
@@ -100,15 +102,13 @@ def main(args):
         gt2pred = -np.ones((2, len(node_gt)), dtype=int) # node_gt to node: edge_index
         gt2pred[0] = np.arange(len(node_gt))
         if len(pred["cls"]) > 0:
+            # Match ground truth objects to predicted objects (Section 4.1.3)
             overlap_count = np.zeros((len(node_gt), len(pred["cls"])))
             gt_kdtree = KDTree(gt_points)
             for pred_idx, seg in enumerate(pred["pcd"]):
                 pred_num_points = len(seg)
                 distances, indices = gt_kdtree.query(seg, distance_upper_bound=args.eval_overlap_threshold)
-                # print(distances.mean(), distances.std(), distances.min(), distances.max())
-                # print(gt_point_ids[indices[indices != gt_kdtree.n]])
                 matched_gt_idx = np.array([OBJID2IDX[scan_id][gt_point_ids[i]] for i in indices[indices != gt_kdtree.n]])
-                # print(OBJID2IDX[scan_id])
                 for gt_idx in range(len(node_gt)):
                     overlap_count[gt_idx, pred_idx] = np.count_nonzero(matched_gt_idx == gt_idx)
                 overlap_percentage = overlap_count[:, pred_idx] / pred_num_points
@@ -124,7 +124,7 @@ def main(args):
                 max_pred_idx = np.argmax(overlap_count[gt_idx])
                 if overlap_count[gt_idx, max_pred_idx] == 0:
                     continue
-                gt2pred[1, gt_idx] = max_pred_idx
+                gt2pred[1, gt_idx] = max_pred_idx # GT object to predicted object
 
         node_pred = pred["cls"] # node: pd
 
@@ -139,7 +139,8 @@ def main(args):
                 pred_idx = gt2pred[1, i].item()
                 gt2pred_map[gt_idx] = pred_idx
 
-        # object
+        # Below recall calculation codes are based on Wu et al. 2023 (https://github.com/ShunChengWu/3DSSG/blob/4b783ec/ssg/utils/util_eva.py).
+        # Object Recall
         for i in range(len(node_gt)):
             gt_idx = gt2pred[0, i]
             pred_idx = gt2pred[1, i]
@@ -154,7 +155,7 @@ def main(args):
             topk["object"].append(index)
             topk["object_per_class"][gt].append(index)
 
-        # predicate
+        # Predicate Recall
         for i in range(len(edge_gt)):
             gt_rel = edge_gt[i]
             if len(gt_rel) != 1: print(len(gt_rel))
@@ -176,7 +177,7 @@ def main(args):
             topk["predicate"].append(index)
             topk["predicate_per_class"][gt_rel].append(index)
 
-        # relationship
+        # Relationship Recall
         for i in range(len(edge_gt)):
             gt_rel = edge_gt[i]
             if len(gt_rel) != 1: print(len(gt_rel))
@@ -206,19 +207,19 @@ def main(args):
 
             gt_index = (gt_sub * cls_n + gt_obj) * rel_k + gt_rel
             index = np.nonzero(sorted_args == gt_index)[0].item()
-            # print(f"gt: {class_mapping[OBJ_CLASS_NAME][gt_sub]} {class_mapping[REL_CLASS_NAME][gt_rel]} {class_mapping[OBJ_CLASS_NAME][gt_obj]}; pred: {class_mapping[OBJ_CLASS_NAME][np.argmax(pred_sub)]} {class_mapping[REL_CLASS_NAME][np.argmax(pred_rel)]} ({np.argmax(pred_rel)}) {class_mapping[OBJ_CLASS_NAME][np.argmax(pred_obj)]}")
             topk["relationship"].append(index)
 
     if args.output_path is None:
-        print("Object:")
+        print(f"Evaluation threshold: {args.eval_overlap_threshold}")
+        print("Object: ")
         for k in ks:
             print(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object']):.3f}")
         print("-------------------------------------")
-        print("Predicate:")
+        print("Predicate: ")
         for k in ks:
             print(f"Recall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate']):.3f}")
         print("-------------------------------------")
-        print("Relationship:")
+        print("Relationship: ")
         for k in ks:
             print(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship']):.3f}")
         print("-------------------------------------")
@@ -255,29 +256,34 @@ def main(args):
                 f.write(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}\n")
             
             f.write("------------------------\n")
-            # class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
+            if args.label_categories == "scannet":
+                class_short = ["bathtub", "bed", "bookshelf", "cabinet", "chair", "counter", "curtain", "desk", "door", "floor", "otherfurniture", "picture", "refridgerator", "shower curtain", "sink", "sofa", "table", "toilet", "wall", "window"]
+            elif args.label_categories == "replica":
+                class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
             f.write("Object per class:\n")
-            # for c in range(len(class_short)):
-            #     f.write(class_short[c])
-            #     f.write("\t")
-            # f.write("avg.\n")
-            # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
-                # if len(topk['object_per_class'][c]) == 0: continue
-                # f.write(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}")
-                # f.write("\t")
+            for c in range(len(class_short)):
+                f.write(class_short[c])
+                f.write("\t\t")
+            f.write("avg.\n")
+            for c in range(len(class_mapping[OBJ_CLASS_NAME])):
+                if len(topk['object_per_class'][c]) == 0: continue
+                f.write(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}")
+                f.write("\t\t")
             f.write(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME])) if len(topk['object_per_class'][c]) > 0]) / sum([1 for c in topk['object_per_class'] if len(topk['object_per_class'][c]) > 0]):.3f}\n")
 
-            # predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
+            if args.label_categories == "scannet":
+                predicate_short = ["attached to", "build in", "connected to", "hanging on", "part of", "standing on", "supported by"]
+            elif args.label_categories == "replica":
+                predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
             f.write("Predicate per class:\n")
-            # for c in range(len(predicate_short)):
-            #     f.write(predicate_short[c])
-            #     f.write("\t")
-            # f.write("avg.\n")
-            # for c in range(len(class_mapping[REL_CLASS_NAME])):
-            #     if len(topk['predicate_per_class'][c]) == 0: continue
-            #     print(class_mapping[REL_CLASS_NAME][c])
-            #     f.write(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}")
-            #     f.write("\t\t")
+            for c in range(len(predicate_short)):
+                f.write(predicate_short[c])
+                f.write("\t\t")
+            f.write("avg.\n")
+            for c in range(len(class_mapping[REL_CLASS_NAME])):
+                if len(topk['predicate_per_class'][c]) == 0: continue
+                f.write(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}")
+                f.write("\t\t")
             f.write(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME])) if len(topk['predicate_per_class'][c]) > 0]) / sum([1 for c in topk['predicate_per_class'] if len(topk['predicate_per_class'][c]) > 0]):.3f}\n")
             f.write("------------------------\n")
             

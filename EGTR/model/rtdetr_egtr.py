@@ -24,9 +24,6 @@
 # Apache-2.0
 
 # Modified from https://github.com/naver-ai/egtr/blob/7f87450f32758ed8583948847a8186f2ee8b21e3/model/egtr.py
-# FROSS
-# Copyright 2024-present *****
-# Apache-2.0
 
 import copy
 import random

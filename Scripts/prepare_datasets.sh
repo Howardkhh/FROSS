@@ -33,7 +33,6 @@ python dataset/relationship2scannet.py --path ../Datasets/3RScan
 
 # extract 2D bounding boxes from 3RScan dataset
 python dataset/boxes2coco.py --path ../Datasets/3RScan --label_categories scannet
-# python dataset/boxes2coco.py --path ../Datasets/3RScan --label_categories 3dssg
 
 # sanity checks
 python tools/show_bbox.py --path ../Datasets/3RScan
