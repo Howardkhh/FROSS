@@ -17,7 +17,34 @@
     TODO: update abstract
 </span>
 
-> The ability to abstract complex 3D environments into simplified and structured representations is crucial across various domains. 3D semantic scene graphs (SSGs) achieve this by representing objects as nodes and their interrelationships as edges, facilitating high-level scene understanding. Existing methods for 3D SSG generation, however, face significant challenges, including high computational demands and non-incremental processing that hinder their suitability for real-time open-world applications. To address this issue, in this work, we propose FROSS (**F**aster-than-**R**eal-Time **O**nline 3D **S**emantic **S**cene Graph Generation), an innovative approach for online and faster-than-real-time 3D SSG generation method that leverages the direct lifting of 2D scene graphs to 3D space and represents objects as 3D Gaussian distributions. This framework eliminates the dependency on precise and computationally-intensive point cloud processing. Furthermore, we extend the Replica dataset with inter-object relationship annotations, creating the ReplicaSSG dataset for comprehensive evaluation of FROSS. The experimental results from evaluations on ReplicaSSG and 3DSSG datasets show that FROSS can achieve superior performance while being significantly faster than prior 3D SSG generation methods.
+The ability to abstract complex 3D environments into simplified and structured representations is crucial across various domains. 3D semantic scene graphs (SSGs) achieve this by representing objects as nodes and their interrelationships as edges, facilitating high-level scene understanding. Existing methods for 3D SSG generation, however, face significant challenges, including high computational demands and non-incremental processing that hinder their suitability for real-time open-world applications. To address this issue, in this work, we propose FROSS (**F**aster-than-**R**eal-Time **O**nline 3D **S**emantic **S**cene Graph Generation), an innovative approach for online and faster-than-real-time 3D SSG generation method that leverages the direct lifting of 2D scene graphs to 3D space and represents objects as 3D Gaussian distributions. This framework eliminates the dependency on precise and computationally-intensive point cloud processing. Furthermore, we extend the Replica dataset with inter-object relationship annotations, creating the ReplicaSSG dataset for comprehensive evaluation of FROSS. The experimental results from evaluations on ReplicaSSG and 3DSSG datasets show that FROSS can achieve superior performance while being significantly faster than prior 3D SSG generation methods.
+
+## Table of Contents
+- [Installation](#installation)
+- [Prepare Dataset](#prepare-dataset)
+  - [Download 3RScan dataset](#1-download-3rscan-dataset)
+  - [Extract and preprocess 3RScan dataset](#2-extract-and-preprocess-3rscan-dataset)
+  - [Prepare datasets for object detection, 2D scene graph generation, and 3D scene graph generation](#3-prepare-datasets-for-object-detection-2d-scene-graph-generation-and-3d-scene-graph-generation)
+  - [Download ReplicaSSG dataset](#4-download-replicassg-dataset)
+  - [Download Visual Genome dataset (optional)](#5-download-visual-genome-dataset-optional)
+- [Download Pretrained RT-DETR-EGTR Weights](#download-pretrained-rt-detr-egtr-weights)
+- [Pretraining RT-DETR on 3RScan and ReplicaSSG](#pretraining-rt-detr-on-3rscan-and-replicassg)
+  - [Download pretrained RT-DETR weights](#1-download-pretrained-rt-detr-weights)
+  - [Train RT-DETR](#2-train-rt-detr)
+  - [Evaluate RT-DETR](#3-evaluate-rt-detr)
+- [Train RT-DETR-EGTR on 3RScan and ReplicaSSG](#train-rt-detr-egtr-on-3rscan-and-replicassg)
+  - [Train RT-DETR-EGTR](#1-train-rt-detr-egtr)
+  - [Export model to ONNX and TensorRT](#2-export-model-to-onnx-and-tensorrt)
+  - [Evaluate RT-DETR-EGTR](#3-evaluate-rt-detr-egtr)
+- [Estimate Camera Trajectory for ReplicaSSG Using ORB-SLAM3 (Optional)](#estimate-camera-trajectory-for-replicassg-using-orb-slam3-optional)
+  - [Build ORB-SLAM3](#1-build-orb-slam3)
+  - [Generate association file for ReplicaSSG](#2-generate-association-file-for-replicassg)
+  - [Run ORB-SLAM3 on ReplicaSSG](#3-run-orb-slam3-on-replicassg)
+  - [Convert SLAM trajectory to 3RScan format](#4-convert-slam-trajectory-to-3rscan-format)
+- [Run FROSS](#run-fross)
+- [Evaluate FROSS](#evaluate-fross)
+- [Citation](#citation)
+- [Acknowledgements](#acknowledgements)
 
 ## Installation
 ```bash
@@ -31,7 +58,7 @@ cd ../../..
 ```
 
 ## Prepare Dataset
-#### 1. Download 3RScan Dataset
+#### 1. Download 3RScan dataset
 Agree to the terms of use and get the download script from [here](https://forms.gle/NvL5dvB4tSFrHfQH6) and save it as `3RScan.py`.
 You may want to parallelize the download script for faster downloading speed.
 ```bash
@@ -41,7 +68,7 @@ wget "http://campar.in.tum.de/public_datasets/3DSSG/3DSSG/objects.json" -P Datas
 wget "http://campar.in.tum.de/public_datasets/3DSSG/3DSSG/relationships.json" -P Datasets/3RScan/data
 ```
 
-#### 2. Extract and Preprocess 3RScan Dataset
+#### 2. Extract and preprocess 3RScan dataset
 ```bash
 git clone https://github.com/WaldJohannaU/3RScan.git
 cd 3RScan/c++
@@ -85,21 +112,28 @@ python3 scripts/dataset/extract_and_preprocess_3RScan.py --path ./Datasets/3RSca
 ```
 
 
-#### 3. Prepare Datasets for Object Detection, 2D Scene Graph Generation, and 3D Scene Graph Generation
+#### 3. Prepare datasets for object detection, 2D scene graph generation, and 3D scene graph generation
 ```bash
-    cd scripts
-    bash prepare_datasets.sh
-    cd ../..
+cd scripts
+bash prepare_datasets.sh
+cd ../..
 ```
 
-#### 4. Download ReplicaSSG Dataset
+#### 4. Download ReplicaSSG dataset
 Download and process the ReplicaSSG dataset according to the [instructions](https://github.com/Howardkhh/ReplicaSSG).
+
+Move the dataset folder to `./Datasets`
+```bash
+# For example
+mv ~/ReplicaSSG/Replica ./Datasets
+```
+
 And extract 2D scene graphs from the ReplicaSSG dataset.
 ```bash
 python scripts/dataset/boxes2coco.py --path ./Datasets/Replica --label_categories replica
 ```
 
-#### (Optional) 5. Download Visual Genome Dataset
+#### 5. Download Visual Genome dataset (optional)
 If you want to train RT-DETR-EGTR on the visual genome dataset, please download the visual genome dataset according to this [instruction](https://github.com/yrcong/RelTR/blob/main/data/README.md).
 
 ## Download Pretrained RT-DETR-EGTR Weights
@@ -110,7 +144,7 @@ You can download the pretrained RT-DETR-EGTR weights from the following links:
 Extract and put them into the `weights/RT-DETR-EGTR` directory. You may skip the next two steps if you have downloaded the pretrained weights.
 
 ## Pretraining RT-DETR on 3RScan and ReplicaSSG
-#### 1. Download Pretrained RT-DETR Weights
+#### 1. Download pretrained RT-DETR weights
 ```bash
 mkdir -p weights/RT-DETR
 wget https://github.com/lyuwenyu/storage/releases/download/v0.1/rtdetrv2_r50vd_m_7x_coco_ema.pth -P weights/RT-DETR/
@@ -145,7 +179,7 @@ python egtr/train_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --output_pat
 python egtr/train_rtdetr_egtr.py --data_path Datasets/visual_genome/ --output_path weights/RT-DETR-EGTR/VG --pretrained weights/RT-DETR/VG/last.pth --gpus $NUM_PROC --lr_initialized 2e-5
 ```
 
-#### 2. Export Model to ONNX and TensorRT
+#### 2. Export model to ONNX and TensorRT
 Please change the artifact path to the path of the trained model.
 ```bash
 # 3RScan dataset
@@ -194,7 +228,7 @@ do
 done
 ```
 
-#### 4. Convert SLAM Trajectory to 3RScan Format
+#### 4. Convert SLAM trajectory to 3RScan format
 ```bash
 cd scripts/dataset
 python convert_SLAM_trajectory_all.sh ../../Datasets/Replica <orbslam_path>
@@ -246,3 +280,14 @@ python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replic
     year      = {2025}
 }
 ```
+
+## Acknowledgements
+- [RT-DETR](https://github.com/lyuwenyu/RT-DETR)
+- [EGTR](https://github.com/naver-ai/egtr)
+- [3RScan](https://github.com/WaldJohannaU/3RScan)
+- [3DSSG](https://3dssg.github.io/)
+- [Replica](https://github.com/facebookresearch/Replica-Dataset)
+- [Visual Genome](https://homes.cs.washington.edu/~ranjay/visualgenome/index.html)
+- [3D Semantic Scene Graph Estimations, Wu et al.](https://github.com/ShunChengWu/3DSSG)
+- [3-D Scene Graph, Kim et al.](https://github.com/Uehwan/3-D-Scene-Graph)
+- [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3)
