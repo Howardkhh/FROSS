@@ -13,7 +13,7 @@ from pycocotools.coco import COCO
 from sg_loader import SG_Loader, GT_SG_Loader
 from keyframe_selection import PeriodicKeyframeSelector, SpatialKeyframeSelector, DynamicKeyframeSelector
 from sg_prediction import SG_Predictor
-from global_sg import GlobalSG_Gaussian, GlobalSG_Kim
+from global_sg import GlobalSG_Gaussian
 
 
 def main(args):
@@ -93,6 +93,7 @@ def main(args):
         if not args.use_kim:
             global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes))
         else:
+            from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
 
         # Initialize scene graph loader

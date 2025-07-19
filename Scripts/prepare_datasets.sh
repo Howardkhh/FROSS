@@ -13,10 +13,7 @@ cd ../Datasets/3RScan
 wget http://campar.in.tum.de/public_datasets/3DSSG/3DSSG_subset.zip
 unzip 3DSSG_subset.zip
 rm 3DSSG_subset.zip
-cd ../../scripts
-
-# check integrity
-python dataset/check.py --path ../Datasets/3RScan
+cd ../../Scripts
 
 # copy the 3DSSG to ScanNet categories mapping, which can be found here: https://docs.google.com/spreadsheets/d/1eRTJ2M9OHz7ypXfYD-KTR1AIT-CrVLmhJf8mxgVZWnI/edit?usp=sharing
 cp files/3dssg_to_scannet.json ../Datasets/3RScan/3DSSG_subset/3dssg_to_scannet.json

@@ -159,6 +159,7 @@ for dir in tqdm(data_dirs):
         elif args.label_categories == 'replica':
             shutil.copyfile(os.path.join(data_folder, dir, "sequence", image), f"{obj_output_folder}/images/{split}/{dir}-{img_idx}.jpg")
         coco["images"].append({"id": cur_img_id, "file_name": f"{dir}-{img_idx}.jpg", "width": seq_width, "height": seq_height})
+        rel[split][str(cur_img_id)] = []
         
         with open(os.path.join(data_folder, dir, "sequence", bb), 'r') as f:
             objects = [obj.split(" ") for obj in f.readlines()]
@@ -190,7 +191,6 @@ for dir in tqdm(data_dirs):
             cur_ann_id += 1
             obj_id += 1
         
-        rel[split][str(cur_img_id)] = []
         for scan_rel in scan_rels:
             if scan_rel[0] in obj_id_in_img and scan_rel[1] in obj_id_in_img:
                 if args.label_categories == 'scannet' and scan_rel[3] not in mapping['ScanNet_rel']:

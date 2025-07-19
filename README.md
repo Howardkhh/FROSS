@@ -13,10 +13,6 @@
 <p align="center"><img width="1000" alt="image" src="Framework.png"></p>
 
 ## Abstract
-<span style="color:#ff0000;">
-    TODO: update abstract
-</span>
-
 The ability to abstract complex 3D environments into simplified and structured representations is crucial across various domains. 3D semantic scene graphs (SSGs) achieve this by representing objects as nodes and their interrelationships as edges, facilitating high-level scene understanding. Existing methods for 3D SSG generation, however, face significant challenges, including high computational demands and non-incremental processing that hinder their suitability for real-time open-world applications. To address this issue, in this work, we propose FROSS (**F**aster-than-**R**eal-Time **O**nline 3D **S**emantic **S**cene Graph Generation), an innovative approach for online and faster-than-real-time 3D SSG generation method that leverages the direct lifting of 2D scene graphs to 3D space and represents objects as 3D Gaussian distributions. This framework eliminates the dependency on precise and computationally-intensive point cloud processing. Furthermore, we extend the Replica dataset with inter-object relationship annotations, creating the ReplicaSSG dataset for comprehensive evaluation of FROSS. The experimental results from evaluations on ReplicaSSG and 3DSSG datasets show that FROSS can achieve superior performance while being significantly faster than prior 3D SSG generation methods.
 
 ## Table of Contents
@@ -47,12 +43,17 @@ The ability to abstract complex 3D environments into simplified and structured r
 - [Acknowledgements](#acknowledgements)
 
 ## Installation
+Tested with Python 3.9 and CUDA 12.1 on Ubuntu 22.04.4.
+### Prerequisites
+- libvips-dev
+
+### Install Dependencies
 ```bash
-# clone this repository
+git clone https://github.com/Howardkhh/FROSS.git
 cd FROSS
 pip install torch==2.3.0 torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
-cd egtr/lib/fpn
+cd EGTR/lib/fpn
 sh make.sh
 cd ../../..
 ```
@@ -60,7 +61,7 @@ cd ../../..
 ## Prepare Dataset
 #### 1. Download 3RScan dataset
 Agree to the terms of use and get the download script from [here](https://forms.gle/NvL5dvB4tSFrHfQH6) and save it as `3RScan.py`.
-You may want to parallelize the download script for faster downloading speed.
+You may want to parallelize the script for faster download speed.
 ```bash
 python 3RScan.py -o Datasets/3RScan/data
 wget "http://campar.in.tum.de/public_datasets/3RScan/3RScan.json" -P Datasets/3RScan/data
@@ -73,7 +74,7 @@ wget "http://campar.in.tum.de/public_datasets/3DSSG/3DSSG/relationships.json" -P
 git clone https://github.com/WaldJohannaU/3RScan.git
 cd 3RScan/c++
 ```
-Build the renderer following the instructions in the [3RScan repository](https://github.com/WaldJohannaU/3RScan/tree/master/c%2B%2B).
+Build the rio_renderer (not rio_example) following the instructions in the [3RScan repository](https://github.com/WaldJohannaU/3RScan/tree/master/c%2B%2B).
 <details>
 
 <summary>Encounter error when building rio_renderer?</summary>
@@ -96,7 +97,7 @@ If you encounter error similar to the below when building rio_renderer with `mak
 Try patching the `CMakeLists.txt` file with the following:
 ```bash
 cd ../../.. # back to 3RScan directory
-git apply ../scripts/files/rio_renderer.patch
+git apply ../Scripts/files/rio_renderer.patch
 cd c++/rio_renderer/build
 make # and try to make again
 ```
@@ -106,17 +107,37 @@ make # and try to make again
 Render depth maps from the 3RScan dataset using the renderer.
 
 You may need a vnc server to run the renderer in a headless environment.
+(For example: vncserver && export DISPLAY=:1.0)
+
 
 ```bash
-python3 scripts/dataset/extract_and_preprocess_3RScan.py --path ./Datasets/3RScan/ --rio_renderer_path ./3RScan/c++/rio_renderer/build/
+cd ../../../.. # back to FROSS directory
+python3 Scripts/dataset/extract_and_preprocess_3RScan.py --path ./Datasets/3RScan/ --rio_renderer_path ./3RScan/c++/rio_renderer/build/
 ```
 
+Check data integrity.
+```bash
+python Scripts/dataset/check.py --path Datasets/3RScan
+```
+The output should look like below.
+```bash
+Number of folders: 1482
+Number of folders with sequence folder: 1482
+Number of folders with all images: 1482
+Number of images: 363555
+Number of images with bounding box files: 363555
+Number of rendered color images: 363555
+Number of rendered depth images: 363555
+Number of rendered label images: 363555
+Number of visibility files: 363555
+Number of instance files: 363555
+```
 
 #### 3. Prepare datasets for object detection, 2D scene graph generation, and 3D scene graph generation
 ```bash
-cd scripts
+cd Scripts
 bash prepare_datasets.sh
-cd ../..
+cd ..
 ```
 
 #### 4. Download ReplicaSSG dataset
@@ -130,7 +151,7 @@ mv ~/ReplicaSSG/Replica ./Datasets
 
 And extract 2D scene graphs from the ReplicaSSG dataset.
 ```bash
-python scripts/dataset/boxes2coco.py --path ./Datasets/Replica --label_categories replica
+python Scripts/dataset/boxes2coco.py --path ./Datasets/Replica --label_categories replica
 ```
 
 #### 5. Download Visual Genome dataset (optional)
@@ -173,29 +194,29 @@ OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=4 RT-DETR/rtdetrv
 #### 1. Train RT-DETR-EGTR
 ```bash
 # 3RScan dataset
-python egtr/train_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --output_path weights/RT-DETR-EGTR/3RScan20 --pretrained weights/RT-DETR/3RScan20/last.pth --gpus $NUM_PROC
+python EGTR/train_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --output_path weights/RT-DETR-EGTR/3RScan20 --pretrained weights/RT-DETR/3RScan20/last.pth --gpus $NUM_PROC
 
 # ReplicaSSG dataset
-python egtr/train_rtdetr_egtr.py --data_path Datasets/visual_genome/ --output_path weights/RT-DETR-EGTR/VG --pretrained weights/RT-DETR/VG/last.pth --gpus $NUM_PROC --lr_initialized 2e-5
+python EGTR/train_rtdetr_egtr.py --data_path Datasets/visual_genome/ --output_path weights/RT-DETR-EGTR/VG --pretrained weights/RT-DETR/VG/last.pth --gpus $NUM_PROC --lr_initialized 2e-5
 ```
 
 #### 2. Export model to ONNX and TensorRT
 Please change the artifact path to the path of the trained model.
 ```bash
 # 3RScan dataset
-PYTHON_PATH=. python scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+PYTHON_PATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 
 # ReplicaSSG dataset
-PYTHON_PATH=. python scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+PYTHON_PATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 ```
 
 #### 3. Evaluate RT-DETR-EGTR
 ```bash
 # 3RScan dataset
-python egtr/evaluate_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 
 # ReplicaSSG dataset
-python egtr/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 ```
 
 ## Estimate Camera Trajectory for ReplicaSSG Using ORB-SLAM3 (Optional)
@@ -203,7 +224,7 @@ python egtr/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifa
 
 #### 2. Generate association file for ReplicaSSG
 ```bash
-cd scripts/dataset
+cd Scripts/dataset
 python generate_association_file.py --replica_path ../../Datasets/Replica
 ```
 
@@ -213,10 +234,10 @@ python generate_association_file.py --replica_path ../../Datasets/Replica
 cd <orbslam_path> # ~/ORB_SLAM3
 set -euxo pipefail
 scenes=("office_4" "room_0" "room_1" "room_2" "hotel_0" "frl_apartment_0" "frl_apartment_1" "frl_apartment_2" "frl_apartment_3" "frl_apartment_4" "frl_apartment_5" "apartment_0" "apartment_1" "apartment_2" "office_0" "office_1" "office_2" "office_3")
-replica_path=<replica_path> # path to the Replica dataset (~/FROSS/Datasets/Replica)
+replica_path=<replica_path> # path to the Replica dataset (e.g. ~/FROSS/Datasets/Replica)
 
-# activate Python2 virtual environment with Numpy
-# source .py2_venv/bin/activate
+# Activate Python2 virtual environment with Numpy installed
+source .py2_venv/bin/activate
 
 for scene in "${scenes[@]}"
 do
@@ -230,8 +251,9 @@ done
 
 #### 4. Convert SLAM trajectory to 3RScan format
 ```bash
-cd scripts/dataset
-python convert_SLAM_trajectory_all.sh ../../Datasets/Replica <orbslam_path>
+cd Scripts/dataset
+python convert_SLAM_trajectory.py --replica_path ../../Datasets/Replica --orbslam_path <orbslam_path>
+cd ../..
 ```
 
 ## RUN FROSS
@@ -242,14 +264,14 @@ python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3
 # With ground truth 2D scene graph
 python main.py --dataset_path ../Datasets/3RScan --use_gt_sg
 # With SLAM trajectory
-python main.py --dataset_path ../Datasets/3RScan --not_use_gt_pose
+python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0 --dataset_path ../Datasets/3RScan --not_use_gt_pose
 
 # ReplicaSSG dataset
-python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica
+python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica --label_categories replica
 # With ground truth 2D scene graph
 python main.py --dataset_path ../Datasets/Replica --label_categories replica --use_gt_sg
 # With SLAM trajectory
-python main.py --dataset_path ../Datasets/Replica --label_categories replica --not_use_gt_pose
+python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica --label_categories replica --not_use_gt_pose
 ```
 
 ## Evaluate FROSS
@@ -257,9 +279,9 @@ python main.py --dataset_path ../Datasets/Replica --label_categories replica --n
 # 3RScan dataset
 python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl
 # With ground truth 2D scene graph
-python evaluate.py --dataset_path ../Datasets/Replica/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
+python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
 # With SLAM trajectory
-python evaluate.py --dataset_path ../Datasets/Replica/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
+python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
 
 # ReplicaSSG dataset
 python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl

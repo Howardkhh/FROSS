@@ -33,7 +33,7 @@ from typing import Dict, List, Optional
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers.models.detr.feature_extraction_detr import center_to_corners_format
+from transformers.image_transforms import center_to_corners_format
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import ModelOutput, requires_backends
 from scipy.optimize import linear_sum_assignment

@@ -8,20 +8,11 @@ import numpy as np
 
 import torchvision.transforms.functional
 from transformers import DetrFeatureExtractor
+from transformers.image_transforms import center_to_corners_format
 from transformers.utils import TensorType
 from transformers.feature_extraction_utils import BatchFeature
 
 import model.transform as T
-
-
-def center_to_corners_format(x):
-    """
-    Converts a PyTorch tensor of bounding boxes of center format (center_x, center_y, width, height) to corners format
-    (x_0, y_0, x_1, y_1).
-    """
-    x_c, y_c, w, h = x.unbind(-1)
-    b = [(x_c - 0.5 * w), (y_c - 0.5 * h), (x_c + 0.5 * w), (y_c + 0.5 * h)]
-    return torch.stack(b, dim=-1)
 
 
 class RtDetrFeatureExtractor(DetrFeatureExtractor):

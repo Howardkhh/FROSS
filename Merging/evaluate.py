@@ -7,6 +7,7 @@ from plyfile import PlyData
 from scipy.spatial import KDTree
 from tqdm import tqdm
 import os
+import shutil
 
 def main(args):
 
@@ -210,81 +211,143 @@ def main(args):
             topk["relationship"].append(index)
 
     if args.output_path is None:
+        try:
+            terminal_width = shutil.get_terminal_size().columns
+        except:
+            terminal_width = 100
+
         print(f"Evaluation threshold: {args.eval_overlap_threshold}")
-        print("Object: ")
+        print("Object:")
         for k in ks:
-            print(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object']):.3f}")
-        print("-------------------------------------")
-        print("Predicate: ")
+            print(f"\tRecall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}")
+
+        print("Predicate:")
         for k in ks:
-            print(f"Recall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate']):.3f}")
-        print("-------------------------------------")
-        print("Relationship: ")
+            print(f"\tRecall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate'])}")
+
+        print("Relationship:")
         for k in ks:
-            print(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship']):.3f}")
-        print("-------------------------------------")
-        # class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
-        # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
-        #     print(class_short[c], end="\t")
-        print("Object per class:")
-        # for c in range(len(class_mapping[OBJ_CLASS_NAME])):
-        #     print(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}", end="\t")
-        print(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME]))]) / len(class_mapping[OBJ_CLASS_NAME]):.3f}")
-        print("-------------------------------------")
-        # predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
-        # for c in range(len(class_mapping[REL_CLASS_NAME])):
-        #     print(predicate_short[c], end="\t")
-        print("Predicate per class:")
+            print(f"\tRecall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}")
+
+        print("------------------------")
+
+        if args.label_categories == "scannet":
+            class_short = ["bathtub", "bed", "bookshelf", "cabinet", "chair", "counter", "curtain", "desk", "door", "floor", "otherfurniture", "picture", "refridgerator", "shower curtain", "sink", "sofa", "table", "toilet", "wall", "window"]
+        elif args.label_categories == "replica":
+            class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
+        col_width = max(len(name) for name in class_short) + 2
+        num_cols = max(1, terminal_width // col_width)
+
+        print("Object per class (recall@1):")
+
+        for c in range(len(class_short)):
+            print(f"{class_short[c]:<{col_width}}", end="")
+            if (c + 1) % num_cols == 0:
+                print()
+        print("avg.")
+
+        i = 0
+        for c in range(len(class_mapping[OBJ_CLASS_NAME])):
+            if len(topk['object_per_class'][c]) == 0:
+                continue
+            print(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):<{col_width}.3f}", end="")
+            if (i + 1) % num_cols == 0:
+                print()
+            i += 1
+        print(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME])) if len(topk['object_per_class'][c]) > 0]) / sum([1 for c in topk['object_per_class'] if len(topk['object_per_class'][c]) > 0]):<{col_width}.3f}")
+
+        print("------------------------")
+
+        if args.label_categories == "scannet":
+            predicate_short = ["attached to", "build in", "connected to", "hanging on", "part of", "standing on", "supported by"]
+        elif args.label_categories == "replica":
+            predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
+        col_width = max(len(name) for name in predicate_short) + 2
+        num_cols = max(1, terminal_width // col_width)
+
+        print("Predicate per class (recall@1):")
+
+        i = 0
         for c in range(len(class_mapping[REL_CLASS_NAME])):
-            print(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}", end="\t\t")
-        print(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME]))]) / len(class_mapping[REL_CLASS_NAME]):.3f}")
+            if len(topk['predicate_per_class'][c]) == 0:
+                continue
+            print(f"{class_mapping[REL_CLASS_NAME][c]:<{col_width}}", end="")
+            if (i + 1) % num_cols == 0:
+                print()
+            i += 1
+        print("avg.")
+
+        i = 0
+        for c in range(len(class_mapping[REL_CLASS_NAME])):
+            if len(topk['predicate_per_class'][c]) == 0:
+                continue
+            print(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):<{col_width}.3f}", end="")
+            if (i + 1) % num_cols == 0:
+                print()
+            i += 1
+        print(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME])) if len(topk['predicate_per_class'][c]) > 0]) / sum([1 for c in topk['predicate_per_class'] if len(topk['predicate_per_class'][c]) > 0]):<{col_width}.3f}")
+
+        print("------------------------")
+
     else:
         os.makedirs(args.output_path.parent, exist_ok=True)
         with open(args.output_path, 'a') as f:
             f.write("\n")
             f.write(f"Evaluation threshold: {args.eval_overlap_threshold}\n")
-            f.write("Object: ")
+            f.write("Object:\n")
             for k in ks:
-                f.write(f"Recall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}\n")
+                f.write(f"\tRecall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}\n")
 
-            f.write("Predicate: ")
+            f.write("Predicate:\n")
             for k in ks:
-                f.write(f"Recall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate'])}\n")
+                f.write(f"\tRecall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate'])}\n")
 
-            f.write("Relationship: ")
+            f.write("Relationship:\n")
             for k in ks:
-                f.write(f"Recall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}\n")
-            
+                f.write(f"\tRecall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}\n")
+
             f.write("------------------------\n")
+
             if args.label_categories == "scannet":
                 class_short = ["bathtub", "bed", "bookshelf", "cabinet", "chair", "counter", "curtain", "desk", "door", "floor", "otherfurniture", "picture", "refridgerator", "shower curtain", "sink", "sofa", "table", "toilet", "wall", "window"]
             elif args.label_categories == "replica":
                 class_short = ["bag", "bskt.", "bed", "bench", "bike", "book", "botl.", "bowl", "box", "cab.", "chair", "clock", "cntr.", "cup", "curt.", "desk", "door", "lamp", "pil.", "plant", "plate", "pot", "rail.", "scrn.", "shlf.", "shoe", "sink", "stand", "table", "toil.", "towel", "umb.", "vase", "wind."]
-            f.write("Object per class:\n")
+            col_width = max(len(name) for name in class_short) + 2
+            
+            f.write("Object per class (recall@1):\n")
+
             for c in range(len(class_short)):
-                f.write(class_short[c])
-                f.write("\t\t")
+                f.write(f"{class_short[c]:<{col_width}}")
             f.write("avg.\n")
+
             for c in range(len(class_mapping[OBJ_CLASS_NAME])):
-                if len(topk['object_per_class'][c]) == 0: continue
-                f.write(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):.3f}")
-                f.write("\t\t")
-            f.write(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME])) if len(topk['object_per_class'][c]) > 0]) / sum([1 for c in topk['object_per_class'] if len(topk['object_per_class'][c]) > 0]):.3f}\n")
+                if len(topk['object_per_class'][c]) == 0:
+                    continue
+                f.write(f"{sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]):<{col_width}.3f}")
+            f.write(f"{sum([sum([1 for i in topk['object_per_class'][c] if i < 1]) / len(topk['object_per_class'][c]) for c in range(len(class_mapping[OBJ_CLASS_NAME])) if len(topk['object_per_class'][c]) > 0]) / sum([1 for c in topk['object_per_class'] if len(topk['object_per_class'][c]) > 0]):<{col_width}.3f}\n")
+
+            f.write("------------------------\n")
 
             if args.label_categories == "scannet":
                 predicate_short = ["attached to", "build in", "connected to", "hanging on", "part of", "standing on", "supported by"]
             elif args.label_categories == "replica":
                 predicate_short = ["above", "against", "attached to", "has", "in", "near", "on", "under", "with"]
-            f.write("Predicate per class:\n")
-            for c in range(len(predicate_short)):
-                f.write(predicate_short[c])
-                f.write("\t\t")
-            f.write("avg.\n")
+            col_width = max(len(name) for name in predicate_short) + 2
+
+            f.write("Predicate per class (recall@1):\n")
+
             for c in range(len(class_mapping[REL_CLASS_NAME])):
-                if len(topk['predicate_per_class'][c]) == 0: continue
-                f.write(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):.3f}")
-                f.write("\t\t")
-            f.write(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME])) if len(topk['predicate_per_class'][c]) > 0]) / sum([1 for c in topk['predicate_per_class'] if len(topk['predicate_per_class'][c]) > 0]):.3f}\n")
+                if len(topk['predicate_per_class'][c]) == 0:
+                    continue
+                f.write(f"{class_mapping[REL_CLASS_NAME][c]:<{col_width}}")
+            f.write("avg.\n")
+
+            for c in range(len(class_mapping[REL_CLASS_NAME])):
+                if len(topk['predicate_per_class'][c]) == 0:
+                    continue
+                f.write(f"{sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]):<{col_width}.3f}")
+            f.write(f"{sum([sum([1 for i in topk['predicate_per_class'][c] if i < 1]) / len(topk['predicate_per_class'][c]) for c in range(len(class_mapping[REL_CLASS_NAME])) if len(topk['predicate_per_class'][c]) > 0]) / sum([1 for c in topk['predicate_per_class'] if len(topk['predicate_per_class'][c]) > 0]):<{col_width}.3f}\n")
+
             f.write("------------------------\n")
             
 
@@ -297,7 +360,7 @@ if __name__ == "__main__":
     args.add_argument("--output_path", type=Path, default=None)
     args.add_argument("--eval_overlap_threshold", type=float, default=0.1)
     args.add_argument("--skip_no_rel_objects", action="store_true")
-    args.add_argument("--use_aligned_ply", action="store_true")
+    args.add_argument("--use_aligned_ply", action="store_true") # for evaluating 3DSSG (Wu et. al, 2023) outputs
     args = args.parse_args()
 
     assert not (args.label_categories == "replica" and args.use_aligned_ply), "Aligned ply is not available for Replica"

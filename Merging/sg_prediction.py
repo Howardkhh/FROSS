@@ -4,7 +4,7 @@ import sys
 import torch
 import torchvision
 
-sys.path.append("../egtr")
+sys.path.append("../EGTR")
 from model.rtdetr.feature_extractor import RtDetrFeatureExtractor
 from model.rtdetr.rtdetr import RtDetrConfig
 from model.rtdetr_egtr import RtDetrForSceneGraphGeneration
