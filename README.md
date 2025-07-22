@@ -341,7 +341,7 @@ python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replic
 }
 ```
 
-## Acknowledgements
+## References
 - [RT-DETR](https://github.com/lyuwenyu/RT-DETR)
 - [EGTR](https://github.com/naver-ai/egtr)
 - [3RScan](https://github.com/WaldJohannaU/3RScan)
