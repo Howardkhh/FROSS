@@ -20,7 +20,7 @@ for scan in scans:
         trajectory = f.readlines()
 
     if len(trajectory) != len([f for f in os.listdir(args.replica_path / "data" / scan / "sequence") if f.endswith("pose.txt") and not f.endswith("slam.pose.txt")]):
-        print(f"Warning: Number of frames in trajectory {len(trajectory)} does not match number of frames in data {len(os.listdir(args.replica_path / 'data' / scan / 'sequence'))}")
+        print(f'Error: In {scan}, the number of frames in trajectory {len(trajectory)} does not match the number of frames in data {len([f for f in os.listdir(args.replica_path / "data" / scan / "sequence") if f.endswith("pose.txt") and not f.endswith("slam.pose.txt")])}')
         exit(1)
 
     init_pose = np.loadtxt(args.replica_path / "data" / scan / "sequence" / "frame-000000.pose.txt")

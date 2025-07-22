@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers.models.detr.feature_extraction_detr import center_to_corners_format
+from transformers.image_transforms import center_to_corners_format
 from transformers.utils import ModelOutput
 
 from .deformable_detr import (

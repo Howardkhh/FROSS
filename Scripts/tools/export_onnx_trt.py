@@ -9,8 +9,8 @@ from glob import glob
 import onnx 
 import tensorrt as trt
 
-from egtr.model.rtdetr.rtdetr import RtDetrConfig, RtDetr
-from egtr.model.rtdetr_egtr import EgtrHead
+from EGTR.model.rtdetr.rtdetr import RtDetrConfig, RtDetr
+from EGTR.model.rtdetr_egtr import EgtrHead
 
 def main(args, ):
     """main

@@ -107,8 +107,7 @@ make # and try to make again
 Render depth maps from the 3RScan dataset using the renderer.
 
 You may need a vnc server to run the renderer in a headless environment.
-(For example: vncserver && export DISPLAY=:1.0)
-
+(For example: `vncserver && export DISPLAY=:1.0`)
 
 ```bash
 cd ../../../.. # back to FROSS directory
@@ -157,12 +156,40 @@ python Scripts/dataset/boxes2coco.py --path ./Datasets/Replica --label_categorie
 #### 5. Download Visual Genome dataset (optional)
 If you want to train RT-DETR-EGTR on the visual genome dataset, please download the visual genome dataset according to this [instruction](https://github.com/yrcong/RelTR/blob/main/data/README.md).
 
+The file structure should look like this:
+```bash
+Datasets
+└── visual_genome
+    ├── images
+    ├── rel.json
+    ├── test.json
+    ├── train.json
+    └── val.json
+```
+
 ## Download Pretrained RT-DETR-EGTR Weights
 You can download the pretrained RT-DETR-EGTR weights from the following links:
 - [3RScan](https://drive.google.com/file/d/1k7PLsY0CqbZbBHeKU8yA2Eof8wFh4Hap/view?usp=sharing)
 - [ReplicaSSG](https://drive.google.com/file/d/1glMkDC1UPQbd8JfjQa6VzNQRwMDAnOsI/view?usp=sharing)
 
 Extract and put them into the `weights/RT-DETR-EGTR` directory. You may skip the next two steps if you have downloaded the pretrained weights.
+```bash
+mkdir -p weights/RT-DETR-EGTR
+cd weights/RT-DETR-EGTR
+# Put the downloaded weight zip files here
+unzip 3RScan20.zip
+unzip VG.zip
+cd ../..
+```
+
+Export the model to ONNX and TensorRT format:
+```bash
+# 3RScan dataset
+PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+
+# ReplicaSSG dataset
+PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0
+```
 
 ## Pretraining RT-DETR on 3RScan and ReplicaSSG
 #### 1. Download pretrained RT-DETR weights
@@ -184,30 +211,34 @@ OMP_NUM_THREADS=4 torchrun --log_dir logs/RT-DETR -r 3 -t 3 --master_port=9909 -
 #### 3. Evaluate RT-DETR
 ```bash
 # 3RScan dataset
-OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=4 RT-DETR/rtdetrv2_pytorch/tools/train.py -c RT-DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r50vd_m_7x_3rscan20.yml -r weights/RT-DETR/3RScan20/last.pth --test-only
+OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=$NUM_PROC RT-DETR/rtdetrv2_pytorch/tools/train.py -c RT-DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r50vd_m_7x_3rscan20.yml -r weights/RT-DETR/3RScan20/last.pth --test-only
 
 # ReplicaSSG dataset
-OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=4 RT-DETR/rtdetrv2_pytorch/tools/train.py -c RT-DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r50vd_m_7x_vg.yml -r weights/RT-DETR/VG/last.pth --test-only
+OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=$NUM_PROC RT-DETR/rtdetrv2_pytorch/tools/train.py -c RT-DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r50vd_m_7x_vg.yml -r weights/RT-DETR/VG/last.pth --test-only
 ```
 
 ## Train RT-DETR-EGTR on 3RScan and ReplicaSSG
 #### 1. Train RT-DETR-EGTR
 ```bash
+cd EGTR
+
 # 3RScan dataset
-python EGTR/train_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --output_path weights/RT-DETR-EGTR/3RScan20 --pretrained weights/RT-DETR/3RScan20/last.pth --gpus $NUM_PROC
+python train_rtdetr_egtr.py --data_path ../Datasets/3RScan/2DSG20 --output_path ../weights/RT-DETR-EGTR/3RScan20 --pretrained ../weights/RT-DETR/3RScan20/last.pth --gpus $NUM_PROC
 
 # ReplicaSSG dataset
-python EGTR/train_rtdetr_egtr.py --data_path Datasets/visual_genome/ --output_path weights/RT-DETR-EGTR/VG --pretrained weights/RT-DETR/VG/last.pth --gpus $NUM_PROC --lr_initialized 2e-5
+python train_rtdetr_egtr.py --data_path ../Datasets/visual_genome --output_path ../weights/RT-DETR-EGTR/VG --pretrained ../weights/RT-DETR/VG/last.pth --gpus $NUM_PROC --lr_initialized 2e-5
+
+cd ..
 ```
 
 #### 2. Export model to ONNX and TensorRT
 Please change the artifact path to the path of the trained model.
 ```bash
 # 3RScan dataset
-PYTHON_PATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 
 # ReplicaSSG dataset
-PYTHON_PATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0
 ```
 
 #### 3. Evaluate RT-DETR-EGTR
@@ -216,7 +247,7 @@ PYTHON_PATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT
 python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/3RScan/2DSG20 --artifact_path weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
 
 # ReplicaSSG dataset
-python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__3RScan20__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0
+python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__24__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0
 ```
 
 ## Estimate Camera Trajectory for ReplicaSSG Using ORB-SLAM3 (Optional)
@@ -225,23 +256,34 @@ python EGTR/evaluate_rtdetr_egtr.py --data_path Datasets/visual_genome/ --artifa
 #### 2. Generate association file for ReplicaSSG
 ```bash
 cd Scripts/dataset
-python generate_association_file.py --replica_path ../../Datasets/Replica
+python generate_association.py --replica_path ../../Datasets/Replica
 ```
 
 #### 3. Run ORB-SLAM3 on ReplicaSSG
+We found that the ORB_SLAM3::System sometimes crashes when closing the viewer. Please consider turning off the viewer by setting the fourth argument to `false` on Line 62 in the `ORB_SLAM3/Examples/RGB-D/rgbd_tum.cc` file, and rebuild.
+```cpp
+// Create SLAM system. It initializes all system threads and gets ready to process frames.
+ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::RGBD,false);
+```
+
+If you want to use the viewer for visualization, you may need a vnc server to run the ORB-SLAM3 in a headless environment.
+(For example: `vncserver && export DISPLAY=:1.0`)
+
+In addition, please fix the `src/Sim3Solver.cc` file in the ORB-SLAM3 repository to solve nan errors according to this [issue](https://github.com/UZ-SLAMLab/ORB_SLAM3/issues/608).
+
 ```bash
 # Example bash script to run ORB-SLAM3 on all scenes in ReplicaSSG
 cd <orbslam_path> # ~/ORB_SLAM3
 set -euxo pipefail
-scenes=("office_4" "room_0" "room_1" "room_2" "hotel_0" "frl_apartment_0" "frl_apartment_1" "frl_apartment_2" "frl_apartment_3" "frl_apartment_4" "frl_apartment_5" "apartment_0" "apartment_1" "apartment_2" "office_0" "office_1" "office_2" "office_3")
+scenes=("room_0" "room_1" "room_2" "hotel_0" "frl_apartment_0" "frl_apartment_1" "frl_apartment_2" "frl_apartment_3" "frl_apartment_4" "frl_apartment_5" "apartment_0" "apartment_1" "apartment_2" "office_0" "office_1" "office_2" "office_3" "office_4")
 replica_path=<replica_path> # path to the Replica dataset (e.g. ~/FROSS/Datasets/Replica)
 
-# Activate Python2 virtual environment with Numpy installed
+# Activate Python2 virtual environment with Numpy and Matplotlib installed
 source .py2_venv/bin/activate
 
 for scene in "${scenes[@]}"
 do
-    ./Examples/RGB-D/rgbd_tum  Vocabulary/ORBvoc.txt ${replica_path}/ReplicaSSG/files/ORBSLAM3_parameters.yaml ${replica_path}/data/${scene} ${replica_path}/data/${scene}/association.txt
+    ./Examples/RGB-D/rgbd_tum  Vocabulary/ORBvoc.txt ${replica_path}/ReplicaSSG/ORBSLAM3_parameters.yaml ${replica_path}/data/${scene} ${replica_path}/data/${scene}/association.txt
     mv CameraTrajectory.txt CameraTrajectory_${scene}.txt
     mv KeyFrameTrajectory.txt KeyFrameTrajectory_${scene}.txt
 
@@ -260,11 +302,9 @@ cd ../..
 ```bash
 cd Merging
 # 3RScan dataset
-python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0 --dataset_path ../Datasets/3RScan
+python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0/ --dataset_path ../Datasets/3RScan
 # With ground truth 2D scene graph
 python main.py --dataset_path ../Datasets/3RScan --use_gt_sg
-# With SLAM trajectory
-python main.py --artifact_path ../weights/RT-DETR-EGTR/3RScan20/egtr__RT-DETR__3RScan20__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_0.0002__finetune/version_0 --dataset_path ../Datasets/3RScan --not_use_gt_pose
 
 # ReplicaSSG dataset
 python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica --label_categories replica
@@ -280,8 +320,6 @@ python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__las
 python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl
 # With ground truth 2D scene graph
 python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
-# With SLAM trajectory
-python evaluate.py --dataset_path ../Datasets/3RScan/ --prediction_path output/scannet/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
 
 # ReplicaSSG dataset
 python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gtpose.pkl

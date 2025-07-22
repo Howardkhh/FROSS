@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pyvips
+from PIL import Image
 
 @dataclass
 class CameraIntrinsic():
@@ -85,7 +86,7 @@ class SG_Loader():
         self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
         for idx in range(self.sequnce_len):
             depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[idx]
-            depth = pyvips.Image.new_from_file(str(depth_path), access="sequential").numpy()
+            depth = np.array(Image.open(depth_path))
             depth = depth / self.depth_shift # mm to m
             self.depths[idx] = depth
 

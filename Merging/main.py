@@ -53,7 +53,7 @@ def main(args):
         REL_CLASS_NAME = "ScanNet_rel"
     elif args.label_categories == "replica":
         assert split == "test" or split == "val", "Replica is only for testing"
-        obj_ann_path = f"2DSG/test.json"
+        obj_ann_path = f"2DSG/{split}.json"
         rel_ann_path = f"2DSG/rel.json"
         SSG_path = f"ReplicaSSG"
         class_mapping_path = f"{SSG_path}/replica_to_visual_genome.json"
@@ -118,7 +118,7 @@ def main(args):
         frame_start_time = time.time()
         for idx, data in enumerate(sg_loader):
             frame_cnt += 1
-            
+             
             # Detect objects
             if args.use_gt_sg:
                 depth, classes, bboxes, relation_classes, rels, camera_rot, camera_trans = data
@@ -157,16 +157,21 @@ def main(args):
         new_points_xyz = np.ndarray((0, 3), dtype=np.float32)
         new_points_rgb = np.ndarray((0, 3), dtype=np.uint8)
         point_clouds = []
-        for idx in range(global_sg.global_group.classes.shape[0]):
+        classes = global_sg.global_group.classes
+        means = global_sg.global_group.means
+        covs = global_sg.global_group.covs
+        rels = global_sg.global_group.rels
+        pcd = global_sg.global_group.pcd
+        for idx in range(classes.shape[0]):
             # Sanity checks
-            assert not ((global_sg.global_group.classes[idx] < 0).any() or \
-                        np.isnan(global_sg.global_group.means[idx]).any() or \
-                        np.isnan(global_sg.global_group.covs[idx]).any() or \
-                        (global_sg.global_group.rels[idx] < 0).any() or \
-                        global_sg.global_group.pcd[idx] is None), \
-                        f"class: {(global_sg.global_group.classes[idx] < 0).any()}, mean: {np.isnan(global_sg.global_group.means[idx]).any()}, cov: {np.isnan(global_sg.global_group.covs[idx]).any()}, rels: {(global_sg.global_group.rels[idx] < 0).any()}, pcd: {global_sg.global_group.pcd[idx] is None}"
+            assert not ((classes[idx] < 0).any() or \
+                        np.isnan(means[idx]).any() or \
+                        np.isnan(covs[idx]).any() or \
+                        (rels[idx] < 0).any() or \
+                        pcd[idx] is None), \
+                        f"class: {(classes[idx] < 0).any()}, mean: {np.isnan(means[idx]).any()}, cov: {np.isnan(covs[idx]).any()}, rels: {(rels[idx] < 0).any()}, pcd: {pcd[idx] is None}"
             
-            pred_points = global_sg.global_group.pcd[idx]
+            pred_points = pcd[idx]
             if args.use_kim:
                 pred_points = pred_points[::2500] # skip 50 * 50 to reduce file size
             point_clouds.append(pred_points)
@@ -175,13 +180,13 @@ def main(args):
             new_points_rgb = np.concatenate((new_points_rgb, np.full((len(pred_points), 3), color)), axis=0)
 
         prediction["pcd"] = point_clouds
-        if not args.use_kim: prediction["cls"] = torch.nn.functional.one_hot(torch.tensor(global_sg.global_group.classes), len(obj_classes)).cpu().numpy()
-        else: prediction["cls"] = global_sg.global_group.classes
-        prediction["mean"] = global_sg.global_group.means
-        prediction["cov"] = global_sg.global_group.covs
-        s, o = np.nonzero(np.sum(global_sg.global_group.rels, axis=-1))
+        if not args.use_kim: prediction["cls"] = torch.nn.functional.one_hot(torch.tensor(classes), len(obj_classes)).cpu().numpy()
+        else: prediction["cls"] = classes
+        prediction["mean"] = means
+        prediction["cov"] = covs
+        s, o = np.nonzero(np.sum(rels, axis=-1))
         prediction["edge_index"] = np.array([s, o])
-        prediction["edge_cls"] = np.array(global_sg.global_group.rels[s, o] / np.sum(global_sg.global_group.rels[s, o], axis=-1, keepdims=True))
+        prediction["edge_cls"] = np.array(rels[s, o] / np.sum(rels[s, o], axis=-1, keepdims=True))
     
         predictions[scan_id] = prediction
 
