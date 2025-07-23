@@ -52,7 +52,7 @@ Tested with Python 3.9 and CUDA 12.1 on Ubuntu 22.04.4.
 git clone https://github.com/Howardkhh/FROSS.git
 cd FROSS
 pip install torch==2.3.0 torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt
+pip install -r requirements.txt -f https://data.pyg.org/whl/torch-2.3.0+cu121.html
 cd EGTR/lib/fpn
 sh make.sh
 cd ../../..
