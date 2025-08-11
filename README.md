@@ -3,7 +3,7 @@
 # FROSS: Faster-than-Real-Time Online 3D Semantic Scene Graph Generation from RGB-D Images <br> [ICCV 2025]
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](TODO)
-[![Paper](https://img.shields.io/badge/Paper-arXiv-green)](TODO)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-green)](https://arxiv.org/abs/2507.19993)
 [![ICCV](https://img.shields.io/badge/ICCV-2025-steelblue)](TODO)
 [![Poster](https://img.shields.io/badge/Poster-PDF-blue)](TODO)
 [![Dataset](https://img.shields.io/badge/Dataset-ReplicaSSG-blue)](https://github.com/Howardkhh/ReplicaSSG)
@@ -13,7 +13,7 @@
 <p align="center"><img width="1000" alt="image" src="Framework.png"></p>
 
 ## Abstract
-The ability to abstract complex 3D environments into simplified and structured representations is crucial across various domains. 3D semantic scene graphs (SSGs) achieve this by representing objects as nodes and their interrelationships as edges, facilitating high-level scene understanding. Existing methods for 3D SSG generation, however, face significant challenges, including high computational demands and non-incremental processing that hinder their suitability for real-time open-world applications. To address this issue, in this work, we propose FROSS (**F**aster-than-**R**eal-Time **O**nline 3D **S**emantic **S**cene Graph Generation), an innovative approach for online and faster-than-real-time 3D SSG generation method that leverages the direct lifting of 2D scene graphs to 3D space and represents objects as 3D Gaussian distributions. This framework eliminates the dependency on precise and computationally-intensive point cloud processing. Furthermore, we extend the Replica dataset with inter-object relationship annotations, creating the ReplicaSSG dataset for comprehensive evaluation of FROSS. The experimental results from evaluations on ReplicaSSG and 3DSSG datasets show that FROSS can achieve superior performance while being significantly faster than prior 3D SSG generation methods.
+The ability to abstract complex 3D environments into simplified and structured representations is crucial across various domains. 3D semantic scene graphs (SSGs) achieve this by representing objects as nodes and their interrelationships as edges, facilitating high-level scene understanding. Existing methods for 3D SSG generation, however, face significant challenges, including high computational demands and non-incremental processing that hinder their suitability for real-time open-world applications. To address this issue, we propose FROSS (**F**aster-than-**R**eal-Time **O**nline 3D **S**emantic **S**cene Graph Generation), an innovative approach for online and faster-than-real-time 3D SSG generation that leverages the direct lifting of 2D scene graphs to 3D space and represents objects as 3D Gaussian distributions. This framework eliminates the dependency on precise and computationally-intensive point cloud processing. Furthermore, we extend the Replica dataset with inter-object relationship annotations, creating the ReplicaSSG dataset for comprehensive evaluation of FROSS. The experimental results from evaluations on ReplicaSSG and 3DSSG datasets show that FROSS can achieve superior performance while operating significantly faster than prior 3D SSG generation methods.
 
 ## Table of Contents
 - [Installation](#installation)
@@ -33,14 +33,14 @@ The ability to abstract complex 3D environments into simplified and structured r
   - [Export model to ONNX and TensorRT](#2-export-model-to-onnx-and-tensorrt)
   - [Evaluate RT-DETR-EGTR](#3-evaluate-rt-detr-egtr)
 - [Estimate Camera Trajectory for ReplicaSSG Using ORB-SLAM3 (Optional)](#estimate-camera-trajectory-for-replicassg-using-orb-slam3-optional)
-  - [Build ORB-SLAM3](#1-build-orb-slam3)
+  - [Build ORB-SLAM3](#1-build-orb-slam3-following-the-instructions)
   - [Generate association file for ReplicaSSG](#2-generate-association-file-for-replicassg)
   - [Run ORB-SLAM3 on ReplicaSSG](#3-run-orb-slam3-on-replicassg)
   - [Convert SLAM trajectory to 3RScan format](#4-convert-slam-trajectory-to-3rscan-format)
 - [Run FROSS](#run-fross)
 - [Evaluate FROSS](#evaluate-fross)
 - [Citation](#citation)
-- [Acknowledgements](#acknowledgements)
+- [References](#references)
 
 ## Installation
 Tested with Python 3.9 and CUDA 12.1 on Ubuntu 22.04.4.
