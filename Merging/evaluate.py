@@ -43,6 +43,7 @@ def main(args):
         predictions = pickle.load(f) # Predictions from the model
 
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
+    scan_ids = scan_ids[:2] if args.debug else scan_ids
     scan2obj_rel = {} # Scan ID to object and relationship ground truth
     OBJID2IDX = {} # Scan ID to {Obejct ID to index in scan2obj_rel}
     obj_in_rel = {} # Scan ID to set of object IDs that are in relationships
@@ -361,6 +362,7 @@ if __name__ == "__main__":
     args.add_argument("--eval_overlap_threshold", type=float, default=0.1)
     args.add_argument("--skip_no_rel_objects", action="store_true")
     args.add_argument("--use_aligned_ply", action="store_true") # for evaluating 3DSSG (Wu et. al, 2023) outputs
+    args.add_argument("--debug", action="store_true", default=False)
     args = args.parse_args()
 
     assert not (args.label_categories == "replica" and args.use_aligned_ply), "Aligned ply is not available for Replica"
