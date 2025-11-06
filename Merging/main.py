@@ -9,6 +9,8 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from pycocotools.coco import COCO
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from sg_loader import SG_Loader, GT_SG_Loader
 from keyframe_selection import PeriodicKeyframeSelector, SpatialKeyframeSelector, DynamicKeyframeSelector
@@ -38,6 +40,16 @@ def main(args):
         print(f"\tKeyframe IOU threshold: {args.kf_iou_thresh}")
     if args.use_kim:
         print(f"\tUsing Kim's merging method (kim et al., 2019)")
+    if args.use_sam2:
+        print(f"\tUsing SAM2")
+        CKPT_PATH = "../sam2/checkpoints/sam2.1_hiera_base_plus.pt"
+        CFG_PATH  = "../sam2/configs/sam2.1/sam2.1_hiera_b+.yaml"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model  = build_sam2(CFG_PATH, CKPT_PATH).to(device)
+        SAM2_predictor = SAM2ImagePredictor(model)
+        print("SAM2 model loaded.")
+
+
     print(f"Using ground truth scene graphs: {args.use_gt_sg}")
     print(f"Using ground truth camera poses: {args.use_gt_pose}")
     print(f"Saving results to: {args.output_path}")
@@ -69,6 +81,7 @@ def main(args):
     with open(Path(args.dataset_path) / SSG_path / f"{scan_split}_scans.txt") as f:
         scan_ids = f.readlines()
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
+    scan_ids = scan_ids[:2] if args.debug else scan_ids
 
     if not args.use_gt_sg:
         sg_predictor = SG_Predictor(args)
@@ -81,6 +94,10 @@ def main(args):
     predictions = {}
 
     merge_time = 0 # Time taken to merge local scene graphs into global scene graph
+    sam2_total_time = 0 # Time taken for SAM2
+    project_total_time = 0 # Time taken for projecting SAM2 masks to 3D
+    compute_mean_cov_total_time = 0 # Time taken for computing mean and covariance of projected 3D points
+    
     obj_time = 0 # Time taken for object detection
     rel_time = 0 # Time taken for relation extraction
     frame_time = 0 # Time taken for processing each frame
@@ -91,7 +108,11 @@ def main(args):
         
         # Initialize global scene graph
         if not args.use_kim:
-            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes))
+            if args.use_sam2:
+                from global_sg_sam2 import GlobalSG_Gaussian_SAM2
+                global_sg = GlobalSG_Gaussian_SAM2(SAM2_predictor, args.hellinger_threshold, len(obj_classes), len(rel_classes))
+            else:
+                global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes))
         else:
             from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
@@ -143,6 +164,11 @@ def main(args):
             input_classes = class_probs if args.use_kim else classes
             if args.use_kim:
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
+            elif args.use_sam2:
+                sam2_time, project_time, compute_mean_cov_time = global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
+                sam2_total_time += sam2_time
+                project_total_time += project_time
+                compute_mean_cov_total_time += compute_mean_cov_time
             else:
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics)
             merge_time += time.time() - start_time
@@ -204,7 +230,7 @@ def main(args):
     elif args.kf_strategy == "dynamic":
         kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}.pkl"
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}{'_sam2' if args.use_sam2 else ''}.pkl"
     output_path = args.output_path / args.label_categories / output_filename
     with open(output_path, "wb") as f:
         pickle.dump(predictions, f)
@@ -214,6 +240,10 @@ def main(args):
     rel_time_per_frame = rel_time / kf_cnt
     print(f"Number of frames: {frame_cnt}, keyframes: {kf_cnt}")
     print(f"Merge time per frame: {merge_time_per_frame}")
+    if args.use_sam2:
+        print(f"SAM2 time per frame: {sam2_total_time / kf_cnt}")
+        print(f"Projection time per frame: {project_total_time / kf_cnt}")
+        print(f"Compute mean/cov time per frame: {compute_mean_cov_total_time / kf_cnt}")
     print(f"Object time per frame: {obj_time_per_frame}")
     print(f"Relation time per frame: {rel_time_per_frame}")
     print(f"FPS: {frame_cnt / frame_time}")
@@ -252,6 +282,9 @@ if __name__ == "__main__":
     args.add_argument("--kf_rotation", type=float, default=0.017, help="Spatial keyframe rotation threshold in radians. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_iou_thresh", type=float, default=0.2, help="Dynamic keyframe IoU threshold. Only used if --kf_strategy is 'dynamic'.")
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
+    args.add_argument("--use_sam2", action="store_true", default=False, help="Use SAM2.")
+    args.add_argument("--debug", action="store_true", default=False)
+
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose
 

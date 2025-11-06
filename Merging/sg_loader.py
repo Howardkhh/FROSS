@@ -81,23 +81,25 @@ class SG_Loader():
         self.current_idx = 0
         self.sequnce_len = len(self.color_frame_names)
 
-        # Load images and depths beforehand to exclude them from the time measurement
-        self.imgs = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1], 3), dtype=np.uint8)
-        self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
-        for idx in range(self.sequnce_len):
-            depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[idx]
-            depth = np.array(Image.open(depth_path))
-            depth = depth / self.depth_shift # mm to m
-            self.depths[idx] = depth
+        # # Load images and depths beforehand to exclude them from the time measurement
+        # self.imgs = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1], 3), dtype=np.uint8)
+        # self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
+        # for idx in range(self.sequnce_len):
+        #     depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[idx]
+        #     depth = np.array(Image.open(depth_path))
+        #     depth = depth / self.depth_shift # mm to m
+        #     self.depths[idx] = depth
 
-            if gt_sg: continue # Skip loading images if ground truth scene graph is loaded
+        #     if gt_sg: continue # Skip loading images if ground truth scene graph is loaded
 
-            img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[idx]
-            img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
-            if args.label_categories == "scannet": # 90 degrees CW rotation
-                self.imgs[idx] = np.rot90(img, 3)
-            elif args.label_categories == "replica":
-                self.imgs[idx] = img
+        #     img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[idx]
+        #     img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
+        #     if args.label_categories == "scannet": # 90 degrees CW rotation
+        #         self.imgs[idx] = np.rot90(img, 3)
+        #     elif args.label_categories == "replica":
+        #         self.imgs[idx] = img
+
+        self.args = args
 
 
     def __iter__(self):
@@ -107,8 +109,20 @@ class SG_Loader():
         if self.current_idx >= self.sequnce_len:
             raise StopIteration
 
-        img = self.imgs[self.current_idx]
-        depth = self.depths[self.current_idx]
+        # img = self.imgs[self.current_idx]
+        # depth = self.depths[self.current_idx]
+
+        depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[self.current_idx]
+        depth = np.array(Image.open(depth_path))
+        depth = depth / self.depth_shift # mm to m
+
+        img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[self.current_idx]
+        img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
+        if self.args.label_categories == "scannet": # 90 degrees CW rotation
+            img = np.rot90(img, 3)
+        elif self.args.label_categories == "replica":
+            pass
+        
         
         assert f"{self.scan_id}-{self.current_idx:06d}.jpg" == f"{self.scan_id}-{self.color_frame_names[self.current_idx][6:12]}.jpg", \
             f"Frame name mismatch: {self.scan_id}-{self.current_idx:06d}.jpg != {self.current_idx}-{self.color_frame_names[self.current_idx][6:12]}.jpg"
