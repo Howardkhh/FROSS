@@ -16,9 +16,9 @@ class CameraIntrinsic():
 
 
 class SG_Loader():
-    def __init__(self, scan_id, split, args, gt_sg=False):
+    def __init__(self, scan_id, args, gt_sg=False):
         self.scan_id = scan_id
-        self.split = split
+        self.args = args
         self.threerscan_path = Path(args.dataset_path) / "data"
 
         self.color_frame_names = os.listdir(self.threerscan_path / scan_id / "sequence")
@@ -81,26 +81,32 @@ class SG_Loader():
         self.current_idx = 0
         self.sequnce_len = len(self.color_frame_names)
 
-        # # Load images and depths beforehand to exclude them from the time measurement
-        # self.imgs = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1], 3), dtype=np.uint8)
-        # self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
-        # for idx in range(self.sequnce_len):
-        #     depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[idx]
-        #     depth = np.array(Image.open(depth_path))
-        #     depth = depth / self.depth_shift # mm to m
-        #     self.depths[idx] = depth
+        # Load images and depths beforehand to exclude them from the time measurement
+        if self.args.preload:
+            self.imgs = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1], 3), dtype=np.uint8)
+            self.depths = np.ndarray((self.sequnce_len, self.colorSize[0], self.colorSize[1]), dtype=np.float64)
+            for idx in range(self.sequnce_len):
+                img, depth = self.load_frame(idx, gt_sg)
+                if not gt_sg:
+                    self.imgs[idx] = img
+                self.depths[idx] = depth
 
-        #     if gt_sg: continue # Skip loading images if ground truth scene graph is loaded
+    def load_frame(self, idx, gt_sg):
+        depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[idx]
+        depth = np.array(Image.open(depth_path))
+        depth = depth / self.depth_shift # mm to m
 
-        #     img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[idx]
-        #     img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
-        #     if args.label_categories == "scannet": # 90 degrees CW rotation
-        #         self.imgs[idx] = np.rot90(img, 3)
-        #     elif args.label_categories == "replica":
-        #         self.imgs[idx] = img
+        if gt_sg: # We don't need the color image if we have ground truth scene graph
+            return None, depth
 
-        self.args = args
+        img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[idx]
+        img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
+        if self.args.label_categories == "scannet": # 90 degrees CW rotation
+            img = np.rot90(img, 3)
+        elif self.args.label_categories == "replica":
+            img = img
 
+        return img, depth
 
     def __iter__(self):
         return self
@@ -109,20 +115,11 @@ class SG_Loader():
         if self.current_idx >= self.sequnce_len:
             raise StopIteration
 
-        # img = self.imgs[self.current_idx]
-        # depth = self.depths[self.current_idx]
-
-        depth_path = self.threerscan_path / self.scan_id / "sequence" / self.depth_frame_names[self.current_idx]
-        depth = np.array(Image.open(depth_path))
-        depth = depth / self.depth_shift # mm to m
-
-        img_path = self.threerscan_path / self.scan_id / "sequence" / self.color_frame_names[self.current_idx]
-        img = pyvips.Image.new_from_file(str(img_path), access="sequential").numpy()
-        if self.args.label_categories == "scannet": # 90 degrees CW rotation
-            img = np.rot90(img, 3)
-        elif self.args.label_categories == "replica":
-            pass
-        
+        if self.args.preload:
+            img = self.imgs[self.current_idx]
+            depth = self.depths[self.current_idx]
+        else:
+            img, depth = self.load_frame(self.current_idx, False)
         
         assert f"{self.scan_id}-{self.current_idx:06d}.jpg" == f"{self.scan_id}-{self.color_frame_names[self.current_idx][6:12]}.jpg", \
             f"Frame name mismatch: {self.scan_id}-{self.current_idx:06d}.jpg != {self.current_idx}-{self.color_frame_names[self.current_idx][6:12]}.jpg"
@@ -133,9 +130,9 @@ class SG_Loader():
         return img, depth, camera_rot, camera_trans
 
 class GT_SG_Loader(SG_Loader):
-    def __init__(self, scan_id, split, obj_coco, rel_ann, args):
-        super().__init__(scan_id, split, args, gt_sg=True)
-        
+    def __init__(self, scan_id, obj_coco, rel_ann, args):
+        super().__init__(scan_id, args, gt_sg=True)
+
         self.obj_coco = obj_coco
         imgIds = self.obj_coco.getImgIds()
         img_info = self.obj_coco.loadImgs(imgIds)
@@ -148,8 +145,11 @@ class GT_SG_Loader(SG_Loader):
         if self.current_idx >= self.sequnce_len:
             raise StopIteration
 
-        depth = self.depths[self.current_idx]
-        
+        if self.args.preload:
+            depth = self.depths[self.current_idx]
+        else:
+            _, depth = self.load_frame(self.current_idx, True)
+
         assert f"{self.scan_id}-{self.current_idx:06d}.jpg" == f"{self.scan_id}-{self.color_frame_names[self.current_idx][6:12]}.jpg", \
             f"Frame name mismatch: {self.scan_id}-{self.current_idx:06d}.jpg != {self.current_idx}-{self.color_frame_names[self.current_idx][6:12]}.jpg"
         imgId = self.img_file2id[f"{self.scan_id}-{self.current_idx:06d}.jpg"]

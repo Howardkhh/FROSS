@@ -4,7 +4,7 @@
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://projects.howardkhh.net/FROSS/)
 [![Paper](https://img.shields.io/badge/Paper-arXiv-green)](https://arxiv.org/abs/2507.19993)
-[![ICCV](https://img.shields.io/badge/ICCV-2025-steelblue)](TODO)
+[![ICCV](https://img.shields.io/badge/ICCV-2025-steelblue)](https://openaccess.thecvf.com/content/ICCV2025/html/Hou_FROSS_Faster-Than-Real-Time_Online_3D_Semantic_Scene_Graph_Generation_from_RGB-D_ICCV_2025_paper.html)
 [![Poster](https://img.shields.io/badge/Poster-PDF-blue)](https://projects.howardkhh.net/FROSS/Poster.pdf)
 [![Dataset](https://img.shields.io/badge/Dataset-ReplicaSSG-blue)](https://github.com/Howardkhh/ReplicaSSG)
 
@@ -24,11 +24,11 @@ The ability to abstract complex 3D environments into simplified and structured r
   - [Download ReplicaSSG dataset](#4-download-replicassg-dataset)
   - [Download Visual Genome dataset (optional)](#5-download-visual-genome-dataset-optional)
 - [Download Pretrained RT-DETR-EGTR Weights](#download-pretrained-rt-detr-egtr-weights)
-- [Pretraining RT-DETR on 3RScan and ReplicaSSG](#pretraining-rt-detr-on-3rscan-and-replicassg)
+- [Pretrain RT-DETR Object Detector on 3RScan and ReplicaSSG (Optional)](#pretrain-rt-detr-object-detector-on-3rscan-and-replicassg-optional)
   - [Download pretrained RT-DETR weights](#1-download-pretrained-rt-detr-weights)
   - [Train RT-DETR](#2-train-rt-detr)
   - [Evaluate RT-DETR](#3-evaluate-rt-detr)
-- [Train RT-DETR-EGTR on 3RScan and ReplicaSSG](#train-rt-detr-egtr-on-3rscan-and-replicassg)
+- [Train RT-DETR-EGTR 2D Scene Graph Generator on 3RScan and ReplicaSSG (Optional)](#train-rt-detr-egtr-2d-scene-graph-generator-on-3rscan-and-replicassg-optional)
   - [Train RT-DETR-EGTR](#1-train-rt-detr-egtr)
   - [Export model to ONNX and TensorRT](#2-export-model-to-onnx-and-tensorrt)
   - [Evaluate RT-DETR-EGTR](#3-evaluate-rt-detr-egtr)
@@ -191,7 +191,7 @@ PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-
 PYTHONPATH=. python Scripts/tools/export_onnx_trt.py --artifact_path weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0
 ```
 
-## Pretraining RT-DETR on 3RScan and ReplicaSSG
+## Pretrain RT-DETR Object Detector on 3RScan and ReplicaSSG (Optional)
 #### 1. Download pretrained RT-DETR weights
 ```bash
 mkdir -p weights/RT-DETR
@@ -217,7 +217,7 @@ OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=$NUM_PROC RT-DETR
 OMP_NUM_THREADS=4 torchrun --master_port=9909 --nproc_per_node=$NUM_PROC RT-DETR/rtdetrv2_pytorch/tools/train.py -c RT-DETR/rtdetrv2_pytorch/configs/rtdetrv2/rtdetrv2_r50vd_m_7x_vg.yml -r weights/RT-DETR/VG/last.pth --test-only
 ```
 
-## Train RT-DETR-EGTR on 3RScan and ReplicaSSG
+## Train RT-DETR-EGTR 2D Scene Graph Generator on 3RScan and ReplicaSSG (Optional)
 #### 1. Train RT-DETR-EGTR
 ```bash
 cd EGTR
@@ -299,6 +299,14 @@ cd ../..
 ```
 
 ## RUN FROSS
+<details>
+<summary><code>main.py</code> parameters</summary>
+
+- `--use_gt_sg`: Use the ground truth 2D scene graph instead of RT-DETR-EGTR prediction.
+- `--not_use_gt_pose`: Use SLAM trajectory instead of ground truth camera pose.
+- `--not_preload`: Do not preload all images into memory prior to running each scene. Set this if you run out of RAM. Disable this if you are measuring runtime performance.
+</details>
+
 ```bash
 cd Merging
 # 3RScan dataset
@@ -337,7 +345,8 @@ python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replic
     title     = {{FROSS}: {F}aster-than-{R}eal-{T}ime {O}nline 3{D} {S}emantic {S}cene {G}raph {G}eneration from {RGB-D} {I}mages},
     booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
     month     = {October},
-    year      = {2025}
+    year      = {2025},
+    pages     = {28818-28827}
 }
 ```
 

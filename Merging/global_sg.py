@@ -7,13 +7,20 @@ from utils import GaussianSG
 
 # Global 3D scene graph
 class GlobalSG_Gaussian:
-    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7):
+    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False):
         self.num_classes = num_classes
         self.num_rel_classes = num_rel_classes
         self.global_group = GaussianSG(num_rel_classes, hellinger_thershold)
+        self.visualize = visualize
+        if visualize:
+            self.cur_obj = []
+            self.cur_rel = []
 
     def update(self, classes, bboxes, rels, rel_classes, depth, camera_rot, camera_trans, camera_intrinsic): # use depth camera intrinsic
         if len(classes) == 0:
+            if self.visualize:
+                self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
+                self.cur_rel.append(self.global_group.rels.copy())
             return
 
         camera_rot = camera_rot[None, ...] # (1, 3, 3)
@@ -80,5 +87,9 @@ class GlobalSG_Gaussian:
 
         # Calculate the Hellinger distance and merge objects
         self.global_group.merge(update_idx)
-        
+
+        if self.visualize:
+            self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
+            self.cur_rel.append(self.global_group.rels.copy())
+
         return
