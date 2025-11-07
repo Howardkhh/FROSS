@@ -91,16 +91,16 @@ def main(args):
         
         # Initialize global scene graph
         if not args.use_kim:
-            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes))
+            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes), args.visualize_folder is not None)
         else:
             from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
 
         # Initialize scene graph loader
         if args.use_gt_sg:
-            sg_loader = GT_SG_Loader(scan_id, split, objCOCO, rel_ann, args)
+            sg_loader = GT_SG_Loader(scan_id, objCOCO, rel_ann, args)
         else:
-            sg_loader = SG_Loader(scan_id, split, args)
+            sg_loader = SG_Loader(scan_id, args)
 
         # Initialize keyframe selector (experimental, not used in the paper)
         if args.kf_strategy == "none":
@@ -113,6 +113,10 @@ def main(args):
             keyframe_selector = DynamicKeyframeSelector(args.kf_translation, args.kf_rotation, args.kf_iou_thresh, len(obj_classes))
 
         camera_intrinsics = sg_loader.color_intrinsic
+
+        if args.visualize_folder:
+            cur_obj_2d = []
+            cur_rel_2d = []
 
         # Process each frame
         frame_start_time = time.time()
@@ -137,6 +141,10 @@ def main(args):
                 start_time = time.time()
                 rels, relation_classes = sg_predictor.extract_relations(obj_det_output, all_scores)
                 rel_time += time.time() - start_time
+
+            if args.visualize_folder:
+                cur_obj_2d.append({"classes": classes, "bboxes": bboxes, "scores": all_scores})
+                cur_rel_2d.append({"rels": rels, "rel_classes": relation_classes})
 
             # Merge local scene graph into global scene graph
             start_time = time.time()
@@ -190,6 +198,18 @@ def main(args):
     
         predictions[scan_id] = prediction
 
+        if args.visualize_folder:
+            folder = f"{args.visualize_folder}/{'3RScan' if args.label_categories == 'scannet' else 'ReplicaSSG'}/{scan_id}"
+            os.makedirs(folder, exist_ok=True)
+            with open(f"{folder}/{scan_id}_obj.pkl", "wb") as f:
+                pickle.dump(global_sg.cur_obj, f)
+            with open(f"{folder}/{scan_id}_rel.pkl", "wb") as f:
+                pickle.dump(global_sg.cur_rel, f)
+            with open(f"{folder}/{scan_id}_obj_2d.pkl", "wb") as f:
+                pickle.dump(cur_obj_2d, f)
+            with open(f"{folder}/{scan_id}_rel_2d.pkl", "wb") as f:
+                pickle.dump(cur_rel_2d, f)
+
     # Save predictions
     os.makedirs(args.output_path / args.label_categories, exist_ok=True)
     obj_name = f"obj{args.obj_thresh}"
@@ -233,14 +253,20 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--dataset_path", type=str, required=True)
     args.add_argument("--artifact_path", type=Path)
+    args.add_argument("--output_path", type=Path, default="output/")
     args.add_argument("--label_categories", type=str, choices=["scannet", "replica"], default="scannet")
     args.add_argument("--split", type=str, choices=["train", "val", "test"], default="test")
-    args.add_argument("--use_gt_sg", action="store_true", default=False)
-    args.add_argument("--not_use_gt_pose", action="store_true", default=False)
-    args.add_argument("--output_path", type=Path, default="output/")
     args.add_argument("--obj_thresh", type=float, default=0.7)
     args.add_argument("--rel_topk", type=int, default=10)
     args.add_argument("--hellinger_threshold", type=float, default=0.85)
+    args.add_argument("--use_gt_sg", action="store_true", default=False)
+    args.add_argument("--not_use_gt_pose", action="store_true", default=False)
+
+    # Debugging arguments
+    args.add_argument("--not_preload", action="store_true", default=False, help="Preload all images before each scene. Disable this if you run out of memory. Enable this for runtime evaluation.")
+    args.add_argument("--visualize_folder", type=Path, default=None, help="Visualize 2D SG and 3D SSG in each frame and save to the specified folder.")
+
+    # Experimental arguments
     args.add_argument("--kf_strategy", type=str, default="none", choices=["none", "periodic", "spatial", "dynamic"], 
                       help="Keyframe selection strategy. " \
                       "'none' means no keyframe selection, " \
@@ -254,6 +280,7 @@ if __name__ == "__main__":
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose
+    args.preload = not args.not_preload
 
     assert args.artifact_path is not None or args.use_gt_sg, "Artifact path is required when not using ground truth scene graphs"
 
