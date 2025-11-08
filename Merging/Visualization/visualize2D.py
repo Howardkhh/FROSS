@@ -107,12 +107,13 @@ def draw_rel(axe, rel, rel_label, bbox, label):
             )
 def main(args):
     scene = args.scene
-    dataset_path = f"{args.dataset_path}/{scene}/sequence"
+    dataset_path = f"{args.dataset_path}/{scene}/sequence/"
+    dataset = "ReplicaSSG" if "Replica" in dataset_path else "3RScan"
     print(f"Visualizing 2D SG for scene: {scene}")
 
-    with open(f"{args.vis_folder}/{scene}_obj_2d.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{dataset}/{scene}/obj_2d.pkl", "rb") as f:
         obj_2d = pickle.load(f)
-    with open(f"{args.vis_folder}/{scene}_rel_2d.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{dataset}/{scene}/rel_2d.pkl", "rb") as f:
         rel_2d = pickle.load(f)
 
     imgs = sorted([img for img in os.listdir(dataset_path) if img.endswith('.color.jpg')])

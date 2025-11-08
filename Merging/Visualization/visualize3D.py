@@ -10,12 +10,13 @@ from classes import *
 
 def main(args):
     scene = args.scene
-    dataset_path = f"{args.dataset_path}/{scene}/sequence"
+    dataset_path = f"{args.dataset_path}/{scene}/sequence/"
+    dataset = "ReplicaSSG" if "Replica" in dataset_path else "3RScan"
     print(f"Visualizing 3D Gaussians for scene: {scene}")
 
-    with open(f"{args.vis_folder}/{scene}_obj.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{dataset}/{scene}/obj.pkl", "rb") as f:
         obj = pickle.load(f)
-    with open(f"{args.vis_folder}/{scene}_rel.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{dataset}/{scene}/rel.pkl", "rb") as f:
         rel = pickle.load(f)
 
     scene_mesh = pv.read(f"{args.dataset_path}/{scene}/mesh.ply")

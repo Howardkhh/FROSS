@@ -39,6 +39,7 @@ The ability to abstract complex 3D environments into simplified and structured r
   - [Convert SLAM trajectory to 3RScan format](#4-convert-slam-trajectory-to-3rscan-format)
 - [Run FROSS](#run-fross)
 - [Evaluate FROSS](#evaluate-fross)
+- [Visualize Output](#visualize-output)
 - [Citation](#citation)
 - [References](#references)
 
@@ -335,6 +336,20 @@ python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replic
 python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test_gt2dsg_gtpose.pkl
 # With SLAM trajectory
 python evaluate.py --dataset_path ../Datasets/Replica/ --label_categories replica --prediction_path output/replica/predictions_gaussian_obj0.7_rel10_hell0.85_kfnone_test.pkl
+```
+
+## Visualize Output
+To generate visualization videos as shown in our project page (using ReplicaSSG as an example):
+
+1\. Specify `--visualize_folder` in `main.py`.
+```bash
+python main.py --artifact_path ../weights/RT-DETR-EGTR/VG/egtr__RT-DETR__VG__last.pth/batch__6__epochs__50_25__lr__2e-07_2e-06_2e-05__finetune/version_0/ --dataset_path ../Datasets/Replica --label_categories replica --visualize_folder <visualization_output_folder>
+```
+
+2\. Use the `render.sh` script in `Visualization` folder to visualize the output.
+```bash
+cd Visualization
+bash render.sh ../../Datasets/Replica/data ../<visualization_output_folder>
 ```
 
 ## Citation
