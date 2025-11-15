@@ -87,7 +87,10 @@ def main(args):
     topk = {"object": [], "relationship": [], "predicate": [], 
             "object_per_class": {c: [] for c in range(len(class_mapping[OBJ_CLASS_NAME]))},
             "predicate_per_class": {c: [] for c in range(len(class_mapping[REL_CLASS_NAME]))}}
-    for scan_id in tqdm(scan_ids):
+    
+    # scan_ids[:10] for testing
+    for scan_id in tqdm(scan_ids[10:20]):
+    # for scan_id in tqdm(scan_ids):
         node_gt = np.array(scan2obj_rel[scan_id]["obj_cls"]) # node_gt: clsIdx
         edge_gt = np.array(scan2obj_rel[scan_id]["rel_cls"]) # node_gt to node_gt: clsIdx
         edge_index_gt = np.array(scan2obj_rel[scan_id]["rel_edge"]) # node_gt to node_gt: edge_index

@@ -7,10 +7,10 @@ from utils import GaussianSG
 
 # Global 3D scene graph
 class GlobalSG_Gaussian:
-    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False):
+    def __init__(self, hellinger_thershold, dist_threshold=0.5, classes_dist_method='kl', num_classes=20, num_rel_classes=7, visualize=False):
         self.num_classes = num_classes
         self.num_rel_classes = num_rel_classes
-        self.global_group = GaussianSG(num_rel_classes, hellinger_thershold)
+        self.global_group = GaussianSG(num_classes, num_rel_classes, hellinger_thershold, dist_threshold, classes_dist_method)
         self.visualize = visualize
         if visualize:
             self.cur_obj = []

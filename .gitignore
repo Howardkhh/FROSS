@@ -3,9 +3,11 @@
 Datasets
 weights
 logs
+slurm_script
 .venv
 **/visualization/
 **/__pycache__
 **/debug
 **/temp
 **/output
+test

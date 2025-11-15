@@ -17,7 +17,6 @@ from global_sg import GlobalSG_Gaussian
 
 
 def main(args):
-
     # Print configuration
     print(f"Using dataset: {'3RScan' if args.label_categories == 'scannet' else 'ReplicaSSG'}, path: {args.dataset_path}")
     print(f"Using split: {args.split}")
@@ -25,6 +24,7 @@ def main(args):
     print(f"\tObject threshold: {args.obj_thresh}")
     print(f"\tRelation topk: {args.rel_topk}")
     print(f"\tHellinger threshold: {args.hellinger_threshold}")
+    print(f"\tClass distribution distance threshold: {args.classes_dist_threshold}")
     if args.kf_strategy != "none":
         print(f"\tKeyframe strategy: {args.kf_strategy}")
     if args.kf_strategy == "periodic":
@@ -86,12 +86,13 @@ def main(args):
     frame_time = 0 # Time taken for processing each frame
     frame_cnt = 0 # Total number of frames processed
     kf_cnt = 0 # Total number of keyframes selected
-
+    
+    # scan_ids[:10] for testing
+    # for scan_id in tqdm(scan_ids[10:20]):
     for scan_id in tqdm(scan_ids):
-        
         # Initialize global scene graph
         if not args.use_kim:
-            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes), args.visualize_folder is not None)
+            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, args.classes_dist_threshold, args.classes_dist_method, len(obj_classes), len(rel_classes), args.visualize_folder is not None)
         else:
             from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
@@ -129,6 +130,7 @@ def main(args):
             else:
                 img, depth, camera_rot, camera_trans = data
                 start_time = time.time()
+                # TODO: use the classes probabilities for merging
                 obj_det_output, all_scores, classes, class_probs, bboxes = sg_predictor.detect_objects(img)
                 obj_time += time.time() - start_time
 
@@ -148,7 +150,19 @@ def main(args):
 
             # Merge local scene graph into global scene graph
             start_time = time.time()
-            input_classes = class_probs if args.use_kim else classes
+            
+            # input_classes = class_probs if args.use_kim else classes ## ORIGINAL
+            # for passing the class probabilities into merging global SG
+            if not args.use_gt_sg:
+                input_classes = class_probs
+            else:
+                # Convert GT class indices to one-hot probability distributions
+                num_obj_classes = len(obj_classes)
+                # one hot ndarry: (N, num_obj_classes) 
+                one_hot_classes = np.zeros((classes.shape[0], num_obj_classes), dtype=float)
+                one_hot_classes[np.arange(classes.shape[0]), classes] = 1.0
+                input_classes = one_hot_classes
+            
             if args.use_kim:
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
             else:
@@ -188,7 +202,10 @@ def main(args):
             new_points_rgb = np.concatenate((new_points_rgb, np.full((len(pred_points), 3), color)), axis=0)
 
         prediction["pcd"] = point_clouds
-        if not args.use_kim: prediction["cls"] = torch.nn.functional.one_hot(torch.tensor(classes), len(obj_classes)).cpu().numpy()
+        if not args.use_kim: 
+            # change probability distribution to class index
+            classes = classes.argmax(axis=1)
+            prediction["cls"] = torch.nn.functional.one_hot(torch.tensor(classes), len(obj_classes)).cpu().numpy()
         else: prediction["cls"] = classes
         prediction["mean"] = means
         prediction["cov"] = covs
@@ -215,6 +232,7 @@ def main(args):
     obj_name = f"obj{args.obj_thresh}"
     rel_name = f"rel{args.rel_topk}"
     hell_name = f"hell{args.hellinger_threshold}"
+    class_merge_name = f"classdist_{args.classes_dist_method}{args.classes_dist_threshold}"
     if args.kf_strategy == "none":
         kf_name = "kfnone"
     elif args.kf_strategy == "periodic":
@@ -224,7 +242,7 @@ def main(args):
     elif args.kf_strategy == "dynamic":
         kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}.pkl"
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{class_merge_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}.pkl"
     output_path = args.output_path / args.label_categories / output_filename
     with open(output_path, "wb") as f:
         pickle.dump(predictions, f)
@@ -259,6 +277,7 @@ if __name__ == "__main__":
     args.add_argument("--obj_thresh", type=float, default=0.7)
     args.add_argument("--rel_topk", type=int, default=10)
     args.add_argument("--hellinger_threshold", type=float, default=0.85)
+    args.add_argument("--classes_dist_threshold", type=float, default=0.75)
     args.add_argument("--use_gt_sg", action="store_true", default=False)
     args.add_argument("--not_use_gt_pose", action="store_true", default=False)
 
@@ -277,6 +296,7 @@ if __name__ == "__main__":
     args.add_argument("--kf_translation", type=float, default=0.01, help="Spatial keyframe translation threshold in meters. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_rotation", type=float, default=0.017, help="Spatial keyframe rotation threshold in radians. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_iou_thresh", type=float, default=0.2, help="Dynamic keyframe IoU threshold. Only used if --kf_strategy is 'dynamic'.")
+    args.add_argument("--classes_dist_method", type=str, default="kl", choices=["kl", "l2", "js", "hellinger"],)
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose
