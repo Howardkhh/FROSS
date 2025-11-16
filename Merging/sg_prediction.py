@@ -3,6 +3,7 @@ import sys
 
 import torch
 import torchvision
+import numpy as np
 
 sys.path.append("../EGTR")
 from model.rtdetr.feature_extractor import RtDetrFeatureExtractor
@@ -43,11 +44,17 @@ class SG_Predictor():
             _ = self.model(image)
 
     def detect_objects(self, image):
-        ori_h, ori_w = image.shape[:2]
-        image = torch.tensor(image.copy()).permute(2, 0, 1).cuda()
+        if isinstance(image, np.ndarray):
+            ori_h, ori_w = image.shape[:2]
+            image = torch.tensor(image.copy()).permute(2, 0, 1).cuda() / 255.0 # (H, W, C) to (C, H, W)
+        elif isinstance(image, torch.Tensor):
+            ori_h, ori_w = image.shape[1:3]
+            image = image.cuda()
+        else:
+            raise ValueError("Image must be numpy array or torch tensor")
         image = torchvision.transforms.functional.resize(image, (640, 640))
         image = torchvision.transforms.functional.normalize(
-            image / 255.0, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
         image = image.unsqueeze(0)
         obj_det_output = self.model.forward_obj_det(image)
@@ -64,7 +71,7 @@ class SG_Predictor():
         pred_boxes[:, ::2] = pred_boxes[:, ::2] * ori_w
         pred_boxes[:, 1::2] = pred_boxes[:, 1::2] * ori_h
 
-        return obj_det_output, obj_scores, pred_classes.cpu().numpy(), pred_logits.softmax(-1).cpu().numpy(), pred_boxes.cpu().numpy().astype(int)
+        return obj_det_output, obj_scores, pred_classes.cpu().numpy(), pred_logits.softmax(-1).cpu().numpy(), pred_boxes
 
     def extract_relations(self, obj_det_output, obj_scores):
         rel_ext_output = self.model(obj_det_output=obj_det_output)

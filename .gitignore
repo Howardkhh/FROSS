@@ -5,6 +5,8 @@ weights
 logs
 .venv
 **/visualization/
+**/vis
+**/video
 **/__pycache__
 **/debug
 **/temp

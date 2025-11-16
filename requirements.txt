@@ -17,10 +17,5 @@ tensorrt==10.0.1
 tensorrt-cu12==10.2.0.post1
 tensorrt-cu12-bindings==10.2.0.post1
 tensorrt-cu12-libs==10.2.0.post1
-torch-cluster==1.6.3
-torch-geometric==2.2.0
-torch-scatter==2.1.2
-torch-sparse==0.6.18
-torch-spline-conv==1.2.2
 Cython==3.0.11
 pyvips==2.2.3

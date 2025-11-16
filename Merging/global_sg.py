@@ -1,66 +1,133 @@
 from math import floor
+from typing import Literal
+import time
 
+import torch
 import numpy as np
-import open3d as o3d
 
 from utils import GaussianSG
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+SAM_predictor = None
+
+def init_sam2(size: Literal["tiny", "small", "base_plus", "large"] = "tiny"):
+    global SAM_predictor
+    if SAM_predictor is None:
+        SAM_predictor = SAM2ImagePredictor.from_pretrained(f"facebook/sam2.1-hiera-{size}", hydra_overrides_extra=["model.compile_image_encoder=True"])
+        print(f"Initialized SAM2 with {size} model")
+    
+    return SAM_predictor
 
 # Global 3D scene graph
 class GlobalSG_Gaussian:
-    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False):
+    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False, use_sam2=False):
         self.num_classes = num_classes
         self.num_rel_classes = num_rel_classes
         self.global_group = GaussianSG(num_rel_classes, hellinger_thershold)
+        self.use_sam2 = use_sam2
+        if use_sam2:
+            self.sam2 = init_sam2()
         self.visualize = visualize
         if visualize:
             self.cur_obj = []
             self.cur_rel = []
 
-    def update(self, classes, bboxes, rels, rel_classes, depth, camera_rot, camera_trans, camera_intrinsic): # use depth camera intrinsic
+    def update(self, classes, bboxes, rels, rel_classes, depth, camera_rot, camera_trans, camera_intrinsic, img=None): # use depth camera intrinsic
         if len(classes) == 0:
             if self.visualize:
                 self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
                 self.cur_rel.append(self.global_group.rels.copy())
+            if self.use_sam2:
+                return 0., 0., 0.
+
             return
 
         camera_rot = camera_rot[None, ...] # (1, 3, 3)
         camera_trans = camera_trans[None, :, None] # (1, 3, 1)
 
-        # filter out objects with invalid depth
-        invalid_depth = depth[bboxes[:, 1], bboxes[:, 0]] == 0
-        classes = classes[~invalid_depth]
-        bboxes = bboxes[~invalid_depth]
-        if len(rels) > 0:
-            new_idx = np.cumsum(~invalid_depth) - 1
-            new_idx[invalid_depth] = -1
-            valid_edge_idx = np.logical_and(new_idx[rels[:, 0]] != -1, new_idx[rels[:, 1]] != -1)
-            rel_classes = rel_classes[valid_edge_idx]
-            rels = new_idx[rels[valid_edge_idx]]
+        if self.use_sam2:
+            xyxy_bboxes = torch.cat((bboxes[:, :2] - bboxes[:, 2:] / 2, bboxes[:, :2] + bboxes[:, 2:] / 2), dim=1).int()
+            bboxes = bboxes.cpu().numpy().astype(int)
+            start = time.time()
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                self.sam2.set_image(img)
+                masks, _, _ = self.sam2.predict(box=xyxy_bboxes, multimask_output=False)
+            if bboxes.shape[0] > 1:
+                masks = masks.squeeze(1)
+            sam2_time = time.time() - start
 
-        # project 2D to 3D
+            depth_cuda = torch.tensor(depth, device="cuda")
+            camera_rot_cuda = torch.tensor(camera_rot, device="cuda")
+            camera_trans_cuda = torch.tensor(camera_trans, device="cuda")
 
-        # Eq. (2)
-        x = (bboxes[:, 0] - camera_intrinsic.cx) / camera_intrinsic.fx
-        y = (bboxes[:, 1] - camera_intrinsic.cy) / camera_intrinsic.fy
-        z = np.ones_like(x)
-        depth_val = depth[bboxes[:, 1], bboxes[:, 0], None] # (num_objects, 1)
-        camera_coord = (np.stack((x, y, z), axis=-1) * depth_val)[..., None] # (num_objects, 3, 1)
-        mean_3d = (camera_rot @ camera_coord + camera_trans).squeeze(-1) # (num_objects, 3)
+            project_time, compute_mean_cov_time = 0., 0.
+            mean_3d, cov_3d = [], []
+            valid = np.ones((bboxes.shape[0]), dtype=bool)
+            for mask_idx in range(masks.shape[0]):
+                start = time.time()
+                mask_y, mask_x = torch.nonzero(masks[mask_idx], as_tuple=True)
+                if mask_y.shape[0] < 10:
+                    valid[mask_idx] = False
+                    continue
+                depth_vals = depth_cuda[mask_y, mask_x].unsqueeze(-1)  # (num_points, 1)
+                x = (mask_x - camera_intrinsic.cx) / camera_intrinsic.fx
+                y = (mask_y - camera_intrinsic.cy) / camera_intrinsic.fy
+                z = torch.ones_like(x)
+                camera_coords = (torch.stack((x, y, z), dim=-1) * depth_vals).unsqueeze(-1)  # (num_points, 3, 1)
+                coords_3d = (camera_rot_cuda @ camera_coords + camera_trans_cuda).squeeze(-1)  # (num_points, 3)
+                project_time += time.time() - start
+                start = time.time()
+                mean_3d.append(torch.mean(coords_3d, dim=0).cpu().numpy())
+                cov_3d.append((torch.cov(coords_3d.T) + 1e-6 * torch.eye(3, device=coords_3d.device)).cpu().numpy())
+                compute_mean_cov_time += time.time() - start
+            mean_3d = np.stack(mean_3d, axis=0)
+            cov_3d = np.stack(cov_3d, axis=0)
 
-        # Eq. (1)
-        zeros = np.zeros_like(bboxes[:, 0])
-        cov_2d = np.stack((bboxes[:, 2] ** 2, zeros, zeros, bboxes[:, 3] ** 2), axis=-1).reshape(-1, 2, 2) / 12
+            classes = classes[valid]
+            bboxes = bboxes[valid]
+            if len(rels) > 0:
+                new_idx = np.cumsum(valid) - 1
+                new_idx[~valid] = -1
+                valid_edge_idx = np.logical_and(new_idx[rels[:, 0]] != -1, new_idx[rels[:, 1]] != -1)
+                rel_classes = rel_classes[valid_edge_idx]
+                rels = new_idx[rels[valid_edge_idx]]
 
-        # Eq. (3)
-        J = np.array([[[camera_intrinsic.fx, 0, 0], 
-                             [0, camera_intrinsic.fy, 0]]]).repeat(len(bboxes), axis=0) / depth_val[..., None]
-        J[:, 0, 2] = -x * camera_intrinsic.fx / (depth_val[:, 0] ** 2)
-        J[:, 1, 2] = -y * camera_intrinsic.fy / (depth_val[:, 0] ** 2)
-        J_inv = np.linalg.pinv(J)
+        else:
+            # filter out objects with invalid depth
+            invalid_depth = depth[bboxes[:, 1], bboxes[:, 0]] == 0
+            classes = classes[~invalid_depth]
+            bboxes = bboxes[~invalid_depth] # cx, cy, w, h
+            if len(rels) > 0:
+                new_idx = np.cumsum(~invalid_depth) - 1
+                new_idx[invalid_depth] = -1
+                valid_edge_idx = np.logical_and(new_idx[rels[:, 0]] != -1, new_idx[rels[:, 1]] != -1)
+                rel_classes = rel_classes[valid_edge_idx]
+                rels = new_idx[rels[valid_edge_idx]]
 
-        cov_3d = J_inv @ cov_2d @ J_inv.transpose(0, 2, 1) # Eq. (5)
-        cov_3d[:, 2, 2] += (cov_3d[:, 0, 0] + cov_3d[:, 1, 1]) / 2 # Eq. (6)
-        cov_3d = camera_rot @ cov_3d @ camera_rot.transpose(0, 2, 1) # Eq. (7)
+            # project 2D to 3D
+
+            # Eq. (2)
+            x = (bboxes[:, 0] - camera_intrinsic.cx) / camera_intrinsic.fx
+            y = (bboxes[:, 1] - camera_intrinsic.cy) / camera_intrinsic.fy
+            z = np.ones_like(x)
+            depth_val = depth[bboxes[:, 1], bboxes[:, 0], None] # (num_objects, 1)
+            camera_coord = (np.stack((x, y, z), axis=-1) * depth_val)[..., None] # (num_objects, 3, 1)
+            mean_3d = (camera_rot @ camera_coord + camera_trans).squeeze(-1) # (num_objects, 3)
+
+            # Eq. (1)
+            zeros = np.zeros_like(bboxes[:, 0])
+            cov_2d = np.stack((bboxes[:, 2] ** 2, zeros, zeros, bboxes[:, 3] ** 2), axis=-1).reshape(-1, 2, 2) / 12
+
+            # Eq. (3)
+            J = np.array([[[camera_intrinsic.fx, 0, 0], 
+                                [0, camera_intrinsic.fy, 0]]]).repeat(len(bboxes), axis=0) / depth_val[..., None]
+            J[:, 0, 2] = -x * camera_intrinsic.fx / (depth_val[:, 0] ** 2)
+            J[:, 1, 2] = -y * camera_intrinsic.fy / (depth_val[:, 0] ** 2)
+            J_inv = np.linalg.pinv(J)
+
+            cov_3d = J_inv @ cov_2d @ J_inv.transpose(0, 2, 1) # Eq. (5)
+            cov_3d[:, 2, 2] += (cov_3d[:, 0, 0] + cov_3d[:, 1, 1]) / 2 # Eq. (6)
+            cov_3d = camera_rot @ cov_3d @ camera_rot.transpose(0, 2, 1) # Eq. (7)
 
         # Extract middle 50% x 50% of the bounding boxes for evaluation
         bboxes_xyxy_50 = np.concatenate((bboxes[:, :2] - bboxes[:, 2:] / 4, bboxes[:, :2] + bboxes[:, 2:] / 4), axis=1)
@@ -92,4 +159,6 @@ class GlobalSG_Gaussian:
             self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
             self.cur_rel.append(self.global_group.rels.copy())
 
+        if self.use_sam2:
+            return sam2_time, project_time, compute_mean_cov_time
         return
