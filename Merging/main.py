@@ -216,13 +216,13 @@ def main(args):
         if args.visualize_folder:
             folder = f"{args.visualize_folder}/{'3RScan' if args.label_categories == 'scannet' else 'ReplicaSSG'}/{scan_id}"
             os.makedirs(folder, exist_ok=True)
-            with open(f"{folder}/{scan_id}_obj.pkl", "wb") as f:
+            with open(f"{folder}/obj.pkl", "wb") as f:
                 pickle.dump(global_sg.cur_obj, f)
-            with open(f"{folder}/{scan_id}_rel.pkl", "wb") as f:
+            with open(f"{folder}/rel.pkl", "wb") as f:
                 pickle.dump(global_sg.cur_rel, f)
-            with open(f"{folder}/{scan_id}_obj_2d.pkl", "wb") as f:
+            with open(f"{folder}/obj_2d.pkl", "wb") as f:
                 pickle.dump(cur_obj_2d, f)
-            with open(f"{folder}/{scan_id}_rel_2d.pkl", "wb") as f:
+            with open(f"{folder}/rel_2d.pkl", "wb") as f:
                 pickle.dump(cur_rel_2d, f)
 
     # Save predictions
