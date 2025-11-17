@@ -81,7 +81,7 @@ def main(args):
     with open(Path(args.dataset_path) / SSG_path / f"{scan_split}_scans.txt") as f:
         scan_ids = f.readlines()
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
-    scan_ids = scan_ids[:2] if args.debug else scan_ids
+    scan_ids = scan_ids[:10] if args.debug else scan_ids
 
     if not args.use_gt_sg:
         sg_predictor = SG_Predictor(args)
@@ -110,9 +110,32 @@ def main(args):
         if not args.use_kim:
             if args.use_sam2:
                 from global_sg_sam2 import GlobalSG_Gaussian_SAM2
-                global_sg = GlobalSG_Gaussian_SAM2(SAM2_predictor, args.hellinger_threshold, len(obj_classes), len(rel_classes))
+
+                if args.show_sam2_mask:
+                    base = Path('./vis_folder')
+                    dataset_name = '3RScan' if args.label_categories == 'scannet' else 'ReplicaSSG'
+                    if args.rmAmbiguous:
+                        sam2_mask_dir = base / 'SAM_rmAmbiguous' / dataset_name / scan_id
+                    else:
+                        sam2_mask_dir = base / 'SAM' / dataset_name / scan_id
+                else:
+                    sam2_mask_dir = None
+
+                global_sg = GlobalSG_Gaussian_SAM2(SAM2_predictor, 
+                                                   args.hellinger_threshold, 
+                                                   len(obj_classes), 
+                                                   len(rel_classes), 
+                                                   args.visualize_folder is not None,
+                                                   sam2_mask_dir=sam2_mask_dir,
+                                                   class_names=obj_classes,
+                                                   remove_ambiguous_by_class=args.rmAmbiguous)
+                                                   
             else:
-                global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes), args.visualize_folder is not None)
+                global_sg = GlobalSG_Gaussian(args.hellinger_threshold, 
+                                              len(obj_classes), 
+                                              len(rel_classes), 
+                                              args.visualize_folder is not None)
+                                              
         else:
             from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
@@ -173,7 +196,8 @@ def main(args):
             if args.use_kim:
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
             elif args.use_sam2:
-                sam2_time, project_time, compute_mean_cov_time = global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
+                sam2_time, project_time, compute_mean_cov_time =\
+                      global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
                 sam2_total_time += sam2_time
                 project_total_time += project_time
                 compute_mean_cov_total_time += compute_mean_cov_time
@@ -250,7 +274,7 @@ def main(args):
     elif args.kf_strategy == "dynamic":
         kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}{'_sam2' if args.use_sam2 else ''}.pkl"
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}{'_sam2' if args.use_sam2 else ''}{'_rmAmbiguous' if args.rmAmbiguous else ''}.pkl"
     output_path = args.output_path / args.label_categories / output_filename
     with open(output_path, "wb") as f:
         pickle.dump(predictions, f)
@@ -295,6 +319,7 @@ if __name__ == "__main__":
     # Debugging arguments
     args.add_argument("--not_preload", action="store_true", default=False, help="Preload all images before each scene. Disable this if you run out of memory. Enable this for runtime evaluation.")
     args.add_argument("--visualize_folder", type=Path, default=None, help="Visualize 2D SG and 3D SSG in each frame and save to the specified folder.")
+    args.add_argument("--show_sam2_mask", action="store_true", default=False, help="Visualize SAM2 masks during merging.")
 
     # Experimental arguments
     args.add_argument("--kf_strategy", type=str, default="none", choices=["none", "periodic", "spatial", "dynamic"], 
@@ -310,6 +335,8 @@ if __name__ == "__main__":
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
     args.add_argument("--use_sam2", action="store_true", default=False, help="Use SAM2.")
     args.add_argument("--debug", action="store_true", default=False)
+    args.add_argument("--rmAmbiguous", action="store_true", default=False, help="Remove ambiguous detections based on object class.")
+
 
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose

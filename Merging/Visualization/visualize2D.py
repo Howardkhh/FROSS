@@ -110,9 +110,9 @@ def main(args):
     dataset_path = f"{args.dataset_path}/{scene}/sequence"
     print(f"Visualizing 2D SG for scene: {scene}")
 
-    with open(f"{args.vis_folder}/{scene}_obj_2d.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{scene}/{scene}_obj_2d.pkl", "rb") as f:
         obj_2d = pickle.load(f)
-    with open(f"{args.vis_folder}/{scene}_rel_2d.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{scene}/{scene}_rel_2d.pkl", "rb") as f:
         rel_2d = pickle.load(f)
 
     imgs = sorted([img for img in os.listdir(dataset_path) if img.endswith('.color.jpg')])

@@ -13,9 +13,9 @@ def main(args):
     dataset_path = f"{args.dataset_path}/{scene}/sequence"
     print(f"Visualizing 3D Gaussians for scene: {scene}")
 
-    with open(f"{args.vis_folder}/{scene}_obj.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{scene}/{scene}_obj.pkl", "rb") as f:
         obj = pickle.load(f)
-    with open(f"{args.vis_folder}/{scene}_rel.pkl", "rb") as f:
+    with open(f"{args.vis_folder}/{scene}/{scene}_rel.pkl", "rb") as f:
         rel = pickle.load(f)
 
     scene_mesh = pv.read(f"{args.dataset_path}/{scene}/mesh.ply")

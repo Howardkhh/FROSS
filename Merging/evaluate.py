@@ -43,7 +43,7 @@ def main(args):
         predictions = pickle.load(f) # Predictions from the model
 
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
-    scan_ids = scan_ids[:2] if args.debug else scan_ids
+    scan_ids = scan_ids[:10] if args.debug else scan_ids
     scan2obj_rel = {} # Scan ID to object and relationship ground truth
     OBJID2IDX = {} # Scan ID to {Obejct ID to index in scan2obj_rel}
     obj_in_rel = {} # Scan ID to set of object IDs that are in relationships
