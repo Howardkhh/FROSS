@@ -71,7 +71,7 @@ def main(args):
     with open(Path(args.dataset_path) / SSG_path / f"{scan_split}_scans.txt") as f:
         scan_ids = f.readlines()
     scan_ids = [scan_id.strip() for scan_id in scan_ids]
-    scan_ids = scan_ids[:2] if args.debug else scan_ids
+    scan_ids = scan_ids[:10] if args.debug else scan_ids
 
     if not args.use_gt_sg:
         sg_predictor = SG_Predictor(args)
@@ -98,7 +98,7 @@ def main(args):
         
         # Initialize global scene graph
         if not args.use_kim:
-            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes), args.visualize_folder is not None, args.use_sam2)
+            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, len(obj_classes), len(rel_classes), args.visualize_folder is not None, args.use_sam2, args.sam2_postprocessing)
         else:
             from global_sg_kim import GlobalSG_Kim
             global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
@@ -141,6 +141,21 @@ def main(args):
                 if not args.use_sam2:
                     bboxes = bboxes.cpu().numpy().astype(int)
                 obj_time += time.time() - start_time
+
+            # clip bounding boxes (cx, cy, w, h) to image size
+            if isinstance(bboxes, np.ndarray):
+                lib = np
+            else:
+                lib = torch
+            xyxy_boxes = lib.concatenate((bboxes[:, :2] - bboxes[:, 2:] / 2, bboxes[:, :2] + bboxes[:, 2:] / 2), axis=1)
+            xyxy_boxes[:, 0] = lib.clip(xyxy_boxes[:, 0], 0, img.shape[1] - 1)
+            xyxy_boxes[:, 1] = lib.clip(xyxy_boxes[:, 1], 0, img.shape[0] - 1)
+            xyxy_boxes[:, 2] = lib.clip(xyxy_boxes[:, 2], 0, img.shape[1] - 1)
+            xyxy_boxes[:, 3] = lib.clip(xyxy_boxes[:, 3], 0, img.shape[0] - 1)
+            bboxes = lib.stack(((xyxy_boxes[:, 0] + xyxy_boxes[:, 2]) / 2,
+                                     (xyxy_boxes[:, 1] + xyxy_boxes[:, 3]) / 2,
+                                     xyxy_boxes[:, 2] - xyxy_boxes[:, 0],
+                                     xyxy_boxes[:, 3] - xyxy_boxes[:, 1]), axis=1)
 
             # Select keyframes (based on detected objects)
             if not keyframe_selector.is_keyframe(camera_trans, camera_rot, classes):
@@ -239,7 +254,10 @@ def main(args):
     elif args.kf_strategy == "dynamic":
         kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}{'_sam2' if args.use_sam2 else ''}.pkl"
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{kf_name}_{args.split}"\
+        + f"{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}"\
+        + f"{'_sam2' if args.use_sam2 else ''}{'_postprocessing' if args.sam2_postprocessing else ''}{'_debug' if args.debug else ''}.pkl"
+    
     output_path = args.output_path / args.label_categories / output_filename
     with open(output_path, "wb") as f:
         pickle.dump(predictions, f)
@@ -299,6 +317,8 @@ if __name__ == "__main__":
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
     args.add_argument("--use_sam2", action="store_true", default=False, help="Use SAM2.")
     args.add_argument("--debug", action="store_true", default=False)
+    args.add_argument("--sam2_postprocessing", action="store_true", default=False)
+
 
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose

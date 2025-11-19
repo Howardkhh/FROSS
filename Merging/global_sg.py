@@ -20,11 +20,12 @@ def init_sam2(size: Literal["tiny", "small", "base_plus", "large"] = "tiny"):
 
 # Global 3D scene graph
 class GlobalSG_Gaussian:
-    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False, use_sam2=False):
+    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False, use_sam2=False, postprocessing=False):
         self.num_classes = num_classes
         self.num_rel_classes = num_rel_classes
         self.global_group = GaussianSG(num_rel_classes, hellinger_thershold)
         self.use_sam2 = use_sam2
+        self.postprocessing = postprocessing
         if use_sam2:
             self.sam2 = init_sam2()
         self.visualize = visualize
@@ -48,6 +49,7 @@ class GlobalSG_Gaussian:
         if self.use_sam2:
             xyxy_bboxes = torch.cat((bboxes[:, :2] - bboxes[:, 2:] / 2, bboxes[:, :2] + bboxes[:, 2:] / 2), dim=1).int()
             bboxes = bboxes.cpu().numpy().astype(int)
+
             start = time.time()
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 self.sam2.set_image(img)
@@ -63,9 +65,38 @@ class GlobalSG_Gaussian:
             project_time, compute_mean_cov_time = 0., 0.
             mean_3d, cov_3d = [], []
             valid = np.ones((bboxes.shape[0]), dtype=bool)
-            for mask_idx in range(masks.shape[0]):
+
+            if self.postprocessing:
+                # unique class IDs among objects
+                unique_cls = np.unique(classes)
+                class_cover = []
+                for cls_id in unique_cls:
+                    cls_masks = masks[classes == cls_id] 
+                    cls_union = np.any(cls_masks, axis=0) 
+                    class_cover.append(cls_union)
+                class_cover = np.stack(class_cover, axis=0)
+
+                # For each pixel, count how many different classes cover it
+                class_cover_count = class_cover.sum(axis=0) 
+                ambiguous_pixels = class_cover_count > 1 
+                if ambiguous_pixels.any():
+                    masks[:, ambiguous_pixels] = False
+                masks = torch.from_numpy(masks).cuda()
+
+                masks_f = masks.float().unsqueeze(1) 
+                kernel_size = 7
+                kernel = torch.ones((1, 1, kernel_size, kernel_size), device=masks.device)
+                required = kernel_size * kernel_size
+                conv = torch.nn.functional.conv2d(masks_f, kernel, padding=kernel_size // 2)
+                eroded = conv == required
+                masks = eroded.squeeze(1)
+
+            else:
+                masks = torch.from_numpy(masks).cuda()
+                
+            for mask_idx, mask in enumerate(masks):
                 start = time.time()
-                mask_y, mask_x = torch.nonzero(masks[mask_idx], as_tuple=True)
+                mask_y, mask_x = torch.nonzero(mask, as_tuple=True)
                 if mask_y.shape[0] < 10:
                     valid[mask_idx] = False
                     continue
@@ -73,6 +104,7 @@ class GlobalSG_Gaussian:
                 x = (mask_x - camera_intrinsic.cx) / camera_intrinsic.fx
                 y = (mask_y - camera_intrinsic.cy) / camera_intrinsic.fy
                 z = torch.ones_like(x)
+            
                 camera_coords = (torch.stack((x, y, z), dim=-1) * depth_vals).unsqueeze(-1)  # (num_points, 3, 1)
                 coords_3d = (camera_rot_cuda @ camera_coords + camera_trans_cuda).squeeze(-1)  # (num_points, 3)
                 project_time += time.time() - start
@@ -80,6 +112,10 @@ class GlobalSG_Gaussian:
                 mean_3d.append(torch.mean(coords_3d, dim=0).cpu().numpy())
                 cov_3d.append((torch.cov(coords_3d.T) + 1e-6 * torch.eye(3, device=coords_3d.device)).cpu().numpy())
                 compute_mean_cov_time += time.time() - start
+
+            if len(mean_3d) == 0:
+                return sam2_time, project_time, compute_mean_cov_time
+
             mean_3d = np.stack(mean_3d, axis=0)
             cov_3d = np.stack(cov_3d, axis=0)
 
@@ -131,12 +167,15 @@ class GlobalSG_Gaussian:
 
         # Extract middle 50% x 50% of the bounding boxes for evaluation
         bboxes_xyxy_50 = np.concatenate((bboxes[:, :2] - bboxes[:, 2:] / 4, bboxes[:, :2] + bboxes[:, 2:] / 4), axis=1)
+
         proj_coords = []
         proj_count = []
+
         for x1, y1, x2, y2 in bboxes_xyxy_50:
             for x in range(int(x1), int(x2), 50):
                 for y in range(int(y1), int(y2), 50):
                     proj_coords.append([x, y])
+                    
             proj_count.append((floor((int(x2)-int(x1))/50)+1) * (floor((int(y2)-int(y1))/50)+1))
         proj_coords = np.array(proj_coords)
         if len(proj_coords) == 0:
