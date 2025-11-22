@@ -20,10 +20,10 @@ def init_sam2(size: Literal["tiny", "small", "base_plus", "large"] = "tiny"):
 
 # Global 3D scene graph
 class GlobalSG_Gaussian:
-    def __init__(self, hellinger_thershold, num_classes=20, num_rel_classes=7, visualize=False, use_sam2=False, postprocessing=False):
+    def __init__(self, hellinger_thershold, dist_threshold=0.5, classes_dist_method='kl', num_classes=20, num_rel_classes=7, visualize=False, use_sam2=False, postprocessing=False):
         self.num_classes = num_classes
         self.num_rel_classes = num_rel_classes
-        self.global_group = GaussianSG(num_rel_classes, hellinger_thershold)
+        self.global_group = GaussianSG(num_classes, num_rel_classes, hellinger_thershold, dist_threshold, classes_dist_method)
         self.use_sam2 = use_sam2
         self.postprocessing = postprocessing
         if use_sam2:

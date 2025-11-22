@@ -3,6 +3,7 @@
 Datasets
 weights
 logs
+slurm_script
 .venv
 **/visualization/
 **/vis
@@ -11,3 +12,4 @@ logs
 **/debug
 **/temp
 **/output
+test
