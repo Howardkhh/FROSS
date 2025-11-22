@@ -296,7 +296,7 @@ if __name__ == "__main__":
     args.add_argument("--kf_translation", type=float, default=0.01, help="Spatial keyframe translation threshold in meters. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_rotation", type=float, default=0.017, help="Spatial keyframe rotation threshold in radians. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_iou_thresh", type=float, default=0.2, help="Dynamic keyframe IoU threshold. Only used if --kf_strategy is 'dynamic'.")
-    args.add_argument("--classes_dist_method", type=str, default="kl", choices=["kl", "l2", "js", "hellinger"],)
+    args.add_argument("--classes_dist_method", type=str, default="l2", choices=["kl", "l2", "js", "hellinger", "dot_dist"],)
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose

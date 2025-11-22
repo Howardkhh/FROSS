@@ -170,6 +170,7 @@ class GaussianSG:
         p is a 1D array. q_batch is a 2D array (N, K).
         Returns an array of distances (N,).
         """
+        # Ensure p and q_batch are valid probability distributions
         p = np.clip(p, 1e-12, 1.0)
         q_batch = np.clip(q_batch, 1e-12, 1.0)
         
@@ -184,5 +185,7 @@ class GaussianSG:
             return 0.5 * kl_p_m + 0.5 * kl_q_m
         elif metric == 'l2':
             return np.sqrt(np.sum((p - q_batch) ** 2, axis=1))
+        elif metric == 'dot_dist':
+            return 1.0 - np.sum(p * q_batch, axis=1)
         else:
             raise ValueError(f"Unknown metric: {metric}")
