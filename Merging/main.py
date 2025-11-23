@@ -23,8 +23,8 @@ def main(args):
     print("Hyperparameters:")
     print(f"\tObject threshold: {args.obj_thresh}")
     print(f"\tRelation topk: {args.rel_topk}")
-    print(f"\tHellinger threshold: {args.hellinger_threshold}")
-    print(f"\tClass distribution distance threshold: {args.classes_dist_threshold}")
+    print(f"\tMerging threshold: {args.merging_threshold}")
+    print(f"\tClass distribution distance weight: {args.classes_dist_weight}")
     if args.kf_strategy != "none":
         print(f"\tKeyframe strategy: {args.kf_strategy}")
     if args.kf_strategy == "periodic":
@@ -99,10 +99,10 @@ def main(args):
     for scan_id in tqdm(scan_ids):
         # Initialize global scene graph
         if not args.use_kim:
-            global_sg = GlobalSG_Gaussian(args.hellinger_threshold, args.classes_dist_threshold, args.classes_dist_method, len(obj_classes), len(rel_classes), args.visualize_folder is not None, args.use_sam2, args.sam2_postprocessing)
+            global_sg = GlobalSG_Gaussian(args.merging_threshold, args.classes_dist_weight, args.classes_dist_method, len(obj_classes), len(rel_classes), args.visualize_folder is not None, args.use_sam2, args.sam2_postprocessing)
         else:
             from global_sg_kim import GlobalSG_Kim
-            global_sg = GlobalSG_Kim(args.hellinger_threshold, len(obj_classes), len(rel_classes))
+            global_sg = GlobalSG_Kim(args.merging_threshold, len(obj_classes), len(rel_classes))
 
         # Initialize scene graph loader
         if args.use_gt_sg:
@@ -260,8 +260,8 @@ def main(args):
     os.makedirs(args.output_path / args.label_categories, exist_ok=True)
     obj_name = f"obj{args.obj_thresh}"
     rel_name = f"rel{args.rel_topk}"
-    hell_name = f"hell{args.hellinger_threshold}"
-    class_merge_name = f"classdist_{args.classes_dist_method}{args.classes_dist_threshold}"
+    merging_name = f"merging{args.merging_threshold}"
+    class_merge_name = f"classdist_{args.classes_dist_method}{args.classes_dist_weight}"
     if args.kf_strategy == "none":
         kf_name = "kfnone"
     elif args.kf_strategy == "periodic":
@@ -271,7 +271,7 @@ def main(args):
     elif args.kf_strategy == "dynamic":
         kf_name = f"kfdynamic{args.kf_translation}_{args.kf_rotation}_{args.kf_iou_thresh}"
 
-    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{hell_name}_{class_merge_name}_{kf_name}_{args.split}"\
+    output_filename = f"predictions_gaussian_{obj_name}_{rel_name}_{merging_name}_{class_merge_name}_{kf_name}_{args.split}"\
         + f"{'_gt2dsg' if args.use_gt_sg else ''}{'_gtpose' if args.use_gt_pose else ''}{'_kim' if args.use_kim else ''}"\
         + f"{'_sam2' if args.use_sam2 else ''}{'_postprocessing' if args.sam2_postprocessing else ''}{'_debug' if args.debug else ''}.pkl"
     
@@ -312,13 +312,13 @@ if __name__ == "__main__":
     args.add_argument("--split", type=str, choices=["train", "val", "test"], default="test")
     args.add_argument("--obj_thresh", type=float, default=0.7)
     args.add_argument("--rel_topk", type=int, default=10)
-    args.add_argument("--hellinger_threshold", type=float, default=0.9)
     args.add_argument("--use_gt_sg", action="store_true", default=False)
     args.add_argument("--not_use_gt_pose", action="store_true", default=False)
     args.add_argument("--use_sam2", type=bool, default=True, help="Use SAM2.")
     args.add_argument("--sam2_postprocessing", type=bool, default=True)
+    args.add_argument("--merging_threshold", type=float, default=0.9)
     args.add_argument("--classes_dist_method", type=str, default="dot_product", choices=["kl", "l2", "js", "hellinger", "dot_product", "top_class"])
-    args.add_argument("--classes_dist_threshold", type=float, default=0.3)
+    args.add_argument("--classes_dist_weight", type=float, default=0.5)
 
     # Debugging arguments
     args.add_argument("--not_preload", action="store_true", default=False, help="Preload all images before each scene. Disable this if you run out of memory. Enable this for runtime evaluation.")

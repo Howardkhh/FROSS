@@ -2,7 +2,7 @@ import numpy as np
 
 # 3D scene graph with Gaussian representation
 class GaussianSG:
-    def __init__(self, num_obj_class, num_rel_class, merge_threshold, dist_threshold, classes_dist_method):
+    def __init__(self, num_obj_class, num_rel_class, merge_threshold, class_dist_weight, classes_dist_method):
         initial_size = 1000
         self._growth_factor = 2
         self._max_size = initial_size
@@ -19,7 +19,7 @@ class GaussianSG:
         # introduce class prob distribution distance in merging criteria
         self.num_obj_class = num_obj_class
         self._classes = np.ndarray((initial_size, num_obj_class), dtype=float)
-        self.classes_dist_threshold = dist_threshold
+        self.class_dist_weight = class_dist_weight
 
     @property
     def valid_size(self):
@@ -98,17 +98,19 @@ class GaussianSG:
                 continue
             # check class distribution distance
             class_dists = self._batched_distribution_distance(self._classes[idx], self._classes[other_indices], metric=self.classes_dist_method)
-            same_class = class_dists < self.classes_dist_threshold
-            same_class_indices = other_indices[same_class]
-            if len(same_class_indices) == 0:
-                continue
+            # same_class = class_dists < self.classes_dist_threshold
+            # same_class_indices = other_indices[same_class]
+            # if len(same_class_indices) == 0:
+            #     continue
             
             mean1 = self._means[idx]
             cov1 = self._covs[idx]
-            hell_dist = self._batched_hellinger_distance(mean1, cov1, self._means[same_class_indices], self._covs[same_class_indices])
-            min_idx = np.argmin(hell_dist)
-            if hell_dist[min_idx] < self.merge_threshold:
-                merge_idx = same_class_indices[min_idx]
+            gaussian_dist = self._batched_hellinger_distance(mean1, cov1, self._means[other_indices], self._covs[other_indices])
+
+            total_dist = self.class_dist_weight * class_dists + (1 - self.class_dist_weight) * gaussian_dist
+            min_idx = np.argmin(total_dist)
+            if total_dist[min_idx] < self.merge_threshold:
+                merge_idx = other_indices[min_idx]
                 if merge_idx not in update_idx: update_idx.append(merge_idx)
                 assert self._valid_mask[merge_idx] and self._valid_mask[idx]
                 self._merge_gaussians(idx, merge_idx)
