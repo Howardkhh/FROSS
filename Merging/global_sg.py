@@ -13,7 +13,9 @@ SAM_predictor = None
 def init_sam2(size: Literal["tiny", "small", "base_plus", "large"] = "tiny"):
     global SAM_predictor
     if SAM_predictor is None:
-        SAM_predictor = SAM2ImagePredictor.from_pretrained(f"facebook/sam2.1-hiera-{size}", hydra_overrides_extra=["model.compile_image_encoder=True"])
+        SAM_predictor = SAM2ImagePredictor.from_pretrained(f"facebook/sam2.1-hiera-{size}", 
+                                                           hydra_overrides_extra=["model.compile_image_encoder=True"]
+                                                           )
         print(f"Initialized SAM2 with {size} model")
     
     return SAM_predictor
@@ -53,35 +55,27 @@ class GlobalSG_Gaussian:
             start = time.time()
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 self.sam2.set_image(img)
-                masks, _, _ = self.sam2.predict(box=xyxy_bboxes, multimask_output=False)
+                masks, _, _ = self.sam2.predict(box=xyxy_bboxes, multimask_output=False, return_tensor=True)
             if bboxes.shape[0] > 1:
                 masks = masks.squeeze(1)
             sam2_time = time.time() - start
 
-            depth_cuda = torch.tensor(depth, device="cuda")
-            camera_rot_cuda = torch.tensor(camera_rot, device="cuda")
-            camera_trans_cuda = torch.tensor(camera_trans, device="cuda")
-
-            project_time, compute_mean_cov_time = 0., 0.
-            mean_3d, cov_3d = [], []
-            valid = np.ones((bboxes.shape[0]), dtype=bool)
-
             if self.postprocessing:
                 # unique class IDs among objects
-                unique_cls = np.unique(classes)
+                max_classes = torch.tensor(classes).argmax(axis=1)
+                unique_cls = torch.unique(max_classes)
                 class_cover = []
                 for cls_id in unique_cls:
-                    cls_masks = masks[classes == cls_id] 
-                    cls_union = np.any(cls_masks, axis=0) 
+                    cls_masks = masks[max_classes == cls_id] 
+                    cls_union = torch.any(cls_masks, axis=0) 
                     class_cover.append(cls_union)
-                class_cover = np.stack(class_cover, axis=0)
+                class_cover = torch.stack(class_cover, axis=0)
 
                 # For each pixel, count how many different classes cover it
                 class_cover_count = class_cover.sum(axis=0) 
                 ambiguous_pixels = class_cover_count > 1 
                 if ambiguous_pixels.any():
                     masks[:, ambiguous_pixels] = False
-                masks = torch.from_numpy(masks).cuda()
 
                 masks_f = masks.float().unsqueeze(1) 
                 kernel_size = 7
@@ -90,10 +84,15 @@ class GlobalSG_Gaussian:
                 conv = torch.nn.functional.conv2d(masks_f, kernel, padding=kernel_size // 2)
                 eroded = conv == required
                 masks = eroded.squeeze(1)
+            
 
-            else:
-                masks = torch.from_numpy(masks).cuda()
-                
+            depth_cuda = torch.tensor(depth, device="cuda")
+            camera_rot_cuda = torch.tensor(camera_rot, device="cuda")
+            camera_trans_cuda = torch.tensor(camera_trans, device="cuda")
+
+            project_time, compute_mean_cov_time = 0., 0.
+            mean_3d, cov_3d, pcds = [], [], []
+            valid = np.ones((bboxes.shape[0]), dtype=bool)
             for mask_idx, mask in enumerate(masks):
                 start = time.time()
                 mask_y, mask_x = torch.nonzero(mask, as_tuple=True)
@@ -112,6 +111,10 @@ class GlobalSG_Gaussian:
                 mean_3d.append(torch.mean(coords_3d, dim=0).cpu().numpy())
                 cov_3d.append((torch.cov(coords_3d.T) + 1e-6 * torch.eye(3, device=coords_3d.device)).cpu().numpy())
                 compute_mean_cov_time += time.time() - start
+
+                # Extract point clouds for evaluation
+                eval_idx = torch.randint(0, coords_3d.shape[0], (max(coords_3d.shape[0] // 2500, 10), ))
+                pcds.append(coords_3d[eval_idx].cpu().numpy())
 
             if len(mean_3d) == 0:
                 return sam2_time, project_time, compute_mean_cov_time
@@ -165,28 +168,28 @@ class GlobalSG_Gaussian:
             cov_3d[:, 2, 2] += (cov_3d[:, 0, 0] + cov_3d[:, 1, 1]) / 2 # Eq. (6)
             cov_3d = camera_rot @ cov_3d @ camera_rot.transpose(0, 2, 1) # Eq. (7)
 
-        # Extract middle 50% x 50% of the bounding boxes for evaluation
-        bboxes_xyxy_50 = np.concatenate((bboxes[:, :2] - bboxes[:, 2:] / 4, bboxes[:, :2] + bboxes[:, 2:] / 4), axis=1)
+            # Extract middle 50% x 50% of the bounding boxes for evaluation
+            bboxes_xyxy_50 = np.concatenate((bboxes[:, :2] - bboxes[:, 2:] / 4, bboxes[:, :2] + bboxes[:, 2:] / 4), axis=1)
 
-        proj_coords = []
-        proj_count = []
+            proj_coords = []
+            proj_count = []
 
-        for x1, y1, x2, y2 in bboxes_xyxy_50:
-            for x in range(int(x1), int(x2), 50):
-                for y in range(int(y1), int(y2), 50):
-                    proj_coords.append([x, y])
-                    
-            proj_count.append((floor((int(x2)-int(x1))/50)+1) * (floor((int(y2)-int(y1))/50)+1))
-        proj_coords = np.array(proj_coords)
-        if len(proj_coords) == 0:
-            proj_coords = np.zeros((0, 2), dtype=int)
-        x = (proj_coords[:, 0] - camera_intrinsic.cx) / camera_intrinsic.fx
-        y = (proj_coords[:, 1] - camera_intrinsic.cy) / camera_intrinsic.fy
-        z = np.ones_like(x)
-        depth_val = depth[proj_coords[:, 1], proj_coords[:, 0], None]
-        camera_coord = (np.stack((x, y, z), axis=-1) * depth_val)[..., None]
-        world_coord = (camera_rot @ camera_coord + camera_trans).squeeze(-1)
-        pcds = np.split(world_coord, np.cumsum(proj_count)[:-1])
+            for x1, y1, x2, y2 in bboxes_xyxy_50:
+                for x in range(int(x1), int(x2), 50):
+                    for y in range(int(y1), int(y2), 50):
+                        proj_coords.append([x, y])
+                        
+                proj_count.append((floor((int(x2)-int(x1))/50)+1) * (floor((int(y2)-int(y1))/50)+1))
+            proj_coords = np.array(proj_coords)
+            if len(proj_coords) == 0:
+                proj_coords = np.zeros((0, 2), dtype=int)
+            x = (proj_coords[:, 0] - camera_intrinsic.cx) / camera_intrinsic.fx
+            y = (proj_coords[:, 1] - camera_intrinsic.cy) / camera_intrinsic.fy
+            z = np.ones_like(x)
+            depth_val = depth[proj_coords[:, 1], proj_coords[:, 0], None]
+            camera_coord = (np.stack((x, y, z), axis=-1) * depth_val)[..., None]
+            world_coord = (camera_rot @ camera_coord + camera_trans).squeeze(-1)
+            pcds = np.split(world_coord, np.cumsum(proj_count)[:-1])
 
         # Add local 3D SG to global 3D SG
         update_idx = self.global_group.add(classes, mean_3d, cov_3d, rels, rel_classes, pcds)

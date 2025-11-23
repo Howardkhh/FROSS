@@ -44,7 +44,7 @@ The ability to abstract complex 3D environments into simplified and structured r
 - [References](#references)
 
 ## Installation
-Tested with Python 3.9 and CUDA 12.1 on Ubuntu 22.04.4.
+Tested with Python 3.10 and CUDA 11.8 on Ubuntu 22.04.4.
 ### Prerequisites
 - libvips-dev
 
@@ -53,8 +53,9 @@ Tested with Python 3.9 and CUDA 12.1 on Ubuntu 22.04.4.
 git clone https://github.com/Howardkhh/FROSS.git
 cd FROSS
 pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu118
-pip install -e sam2
 pip install -r requirements.txt
+pip install -e sam2
+pip install -U numpy==1.23.5
 cd EGTR/lib/fpn
 sh make.sh
 cd ../../..

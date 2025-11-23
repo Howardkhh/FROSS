@@ -85,7 +85,7 @@ class SAM2ImagePredictor:
     @torch.no_grad()
     def set_image(
         self,
-        image: Union[np.ndarray, Image],
+        image: Union[np.ndarray, Image, torch.Tensor],
     ) -> None:
         """
         Calculates the image embeddings for the provided image, allowing
@@ -104,6 +104,9 @@ class SAM2ImagePredictor:
         elif isinstance(image, Image):
             w, h = image.size
             self._orig_hw = [(h, w)]
+        elif isinstance(image, torch.Tensor):
+            logging.info("For torch tensor image, we assume (CxHxW) format")
+            self._orig_hw = [image.shape[1:3]]
         else:
             raise NotImplementedError("Image format not supported")
 
@@ -243,6 +246,7 @@ class SAM2ImagePredictor:
         multimask_output: bool = True,
         return_logits: bool = False,
         normalize_coords=True,
+        return_tensor=False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Predict masks for the given input prompts, using the currently set image.
@@ -296,6 +300,9 @@ class SAM2ImagePredictor:
             multimask_output,
             return_logits=return_logits,
         )
+
+        if return_tensor:
+            return masks.squeeze(0), iou_predictions.squeeze(0), low_res_masks.squeeze(0)
 
         masks_np = masks.squeeze(0).float().detach().cpu().numpy()
         iou_predictions_np = iou_predictions.squeeze(0).float().detach().cpu().numpy()

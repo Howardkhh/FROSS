@@ -312,10 +312,13 @@ if __name__ == "__main__":
     args.add_argument("--split", type=str, choices=["train", "val", "test"], default="test")
     args.add_argument("--obj_thresh", type=float, default=0.7)
     args.add_argument("--rel_topk", type=int, default=10)
-    args.add_argument("--hellinger_threshold", type=float, default=0.85)
-    args.add_argument("--classes_dist_threshold", type=float, default=0.75)
+    args.add_argument("--hellinger_threshold", type=float, default=0.9)
     args.add_argument("--use_gt_sg", action="store_true", default=False)
     args.add_argument("--not_use_gt_pose", action="store_true", default=False)
+    args.add_argument("--use_sam2", type=bool, default=True, help="Use SAM2.")
+    args.add_argument("--sam2_postprocessing", type=bool, default=True)
+    args.add_argument("--classes_dist_method", type=str, default="dot_product", choices=["kl", "l2", "js", "hellinger", "dot_product", "top_class"])
+    args.add_argument("--classes_dist_threshold", type=float, default=0.3)
 
     # Debugging arguments
     args.add_argument("--not_preload", action="store_true", default=False, help="Preload all images before each scene. Disable this if you run out of memory. Enable this for runtime evaluation.")
@@ -332,11 +335,8 @@ if __name__ == "__main__":
     args.add_argument("--kf_translation", type=float, default=0.01, help="Spatial keyframe translation threshold in meters. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_rotation", type=float, default=0.017, help="Spatial keyframe rotation threshold in radians. Only used if --kf_strategy is 'spatial' or 'dynamic'.")
     args.add_argument("--kf_iou_thresh", type=float, default=0.2, help="Dynamic keyframe IoU threshold. Only used if --kf_strategy is 'dynamic'.")
-    args.add_argument("--classes_dist_method", type=str, default="l2", choices=["kl", "l2", "js", "hellinger", "dot_dist"],)
     args.add_argument("--use_kim", action="store_true", default=False, help="Use Kim's merging method (Kim et al., 2019).")
-    args.add_argument("--use_sam2", action="store_true", default=False, help="Use SAM2.")
     args.add_argument("--debug", action="store_true", default=False)
-    args.add_argument("--sam2_postprocessing", action="store_true", default=False)
 
 
     args = args.parse_args()

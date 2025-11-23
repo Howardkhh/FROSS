@@ -35,7 +35,8 @@ class SAM2Transforms(nn.Module):
         )
 
     def __call__(self, x):
-        x = self.to_tensor(x)
+        if not isinstance(x, torch.Tensor):
+            x = self.to_tensor(x)
         return self.transforms(x)
 
     def forward_batch(self, img_list):

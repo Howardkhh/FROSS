@@ -85,10 +85,12 @@ def main(args):
             scan2obj_rel[scan["scan"]]["rel_cls"].append([cls_idx])
 
     ks = [1] # Recall@k
-    topk = {"object": [], "relationship": [], "predicate": [], 
+    topk = {"object": [], "relationship": [], "predicate": [],
             "object_per_class": {c: [] for c in range(len(class_mapping[OBJ_CLASS_NAME]))},
             "predicate_per_class": {c: [] for c in range(len(class_mapping[REL_CLASS_NAME]))}}
     
+    total_pred_node = 0
+    total_pred_edge = 0
     for scan_id in tqdm(scan_ids):
         node_gt = np.array(scan2obj_rel[scan_id]["obj_cls"]) # node_gt: clsIdx
         edge_gt = np.array(scan2obj_rel[scan_id]["rel_cls"]) # node_gt to node_gt: clsIdx
@@ -144,6 +146,7 @@ def main(args):
 
         # Below recall calculation codes are based on Wu et al. 2023 (https://github.com/ShunChengWu/3DSSG/blob/4b783ec/ssg/utils/util_eva.py).
         # Object Recall
+        total_pred_node += len(node_pred)
         for i in range(len(node_gt)):
             gt_idx = gt2pred[0, i]
             pred_idx = gt2pred[1, i]
@@ -159,6 +162,7 @@ def main(args):
             topk["object_per_class"][gt].append(index)
 
         # Predicate Recall
+        total_pred_edge += len(edge_index_pred_list)
         for i in range(len(edge_gt)):
             gt_rel = edge_gt[i]
             if len(gt_rel) != 1: print(len(gt_rel))
@@ -222,14 +226,19 @@ def main(args):
         print("Object:")
         for k in ks:
             print(f"\tRecall@{k}: {sum([1 for i in topk['object'] if i < k]) / len(topk['object'])}")
+            print(f"\tPrecision@{k}: {sum([1 for i in topk['object'] if i < k]) / total_pred_node}")
+            
 
         print("Predicate:")
         for k in ks:
             print(f"\tRecall@{k}: {sum([1 for i in topk['predicate'] if i < k]) / len(topk['predicate'])}")
-
+            print(f"\tPrecision@{k}: {sum([1 for i in topk['predicate'] if i < k]) / total_pred_edge}")
+            
         print("Relationship:")
         for k in ks:
             print(f"\tRecall@{k}: {sum([1 for i in topk['relationship'] if i < k]) / len(topk['relationship'])}")
+            print(f"\tPrecision@{k}: {sum([1 for i in topk['relationship'] if i < k]) / total_pred_edge}")
+
 
         print("------------------------")
 

@@ -185,7 +185,11 @@ class GaussianSG:
             return 0.5 * kl_p_m + 0.5 * kl_q_m
         elif metric == 'l2':
             return np.sqrt(np.sum((p - q_batch) ** 2, axis=1))
-        elif metric == 'dot_dist':
+        elif metric == 'dot_product':
             return 1.0 - np.sum(p * q_batch, axis=1)
+        elif metric == "top_class":
+            p_top = np.argmax(p)
+            q_top = np.argmax(q_batch, axis=1)
+            return (p_top != q_top).astype(float)
         else:
             raise ValueError(f"Unknown metric: {metric}")
