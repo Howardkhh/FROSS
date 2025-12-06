@@ -41,7 +41,7 @@ class GlobalSG_Gaussian:
                 self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
                 self.cur_rel.append(self.global_group.rels.copy())
             if self.use_sam2:
-                return 0., 0., 0.
+                return 0., 0., 0., 0., 0.
 
             return
 
@@ -58,8 +58,9 @@ class GlobalSG_Gaussian:
                 masks, _, _ = self.sam2.predict(box=xyxy_bboxes, multimask_output=False, return_tensor=True)
             if bboxes.shape[0] > 1:
                 masks = masks.squeeze(1)
-            sam2_time = time.time() - start
+            sam_time = time.time() - start
 
+            start = time.time()
             if self.postprocessing:
                 # unique class IDs among objects
                 max_classes = torch.tensor(classes).argmax(axis=1)
@@ -84,13 +85,15 @@ class GlobalSG_Gaussian:
                 conv = torch.nn.functional.conv2d(masks_f, kernel, padding=kernel_size // 2)
                 eroded = conv == required
                 masks = eroded.squeeze(1)
+            post_time = time.time() - start
             
 
+            
             depth_cuda = torch.tensor(depth, device="cuda")
             camera_rot_cuda = torch.tensor(camera_rot, device="cuda")
             camera_trans_cuda = torch.tensor(camera_trans, device="cuda")
 
-            project_time, compute_mean_cov_time = 0., 0.
+            proj_time, gaussian_time = 0., 0.
             mean_3d, cov_3d, pcds = [], [], []
             valid = np.ones((bboxes.shape[0]), dtype=bool)
             for mask_idx, mask in enumerate(masks):
@@ -106,18 +109,17 @@ class GlobalSG_Gaussian:
             
                 camera_coords = (torch.stack((x, y, z), dim=-1) * depth_vals).unsqueeze(-1)  # (num_points, 3, 1)
                 coords_3d = (camera_rot_cuda @ camera_coords + camera_trans_cuda).squeeze(-1)  # (num_points, 3)
-                project_time += time.time() - start
+                proj_time += time.time() - start
                 start = time.time()
                 mean_3d.append(torch.mean(coords_3d, dim=0).cpu().numpy())
                 cov_3d.append((torch.cov(coords_3d.T) + 1e-6 * torch.eye(3, device=coords_3d.device)).cpu().numpy())
-                compute_mean_cov_time += time.time() - start
-
+                gaussian_time += time.time() - start
                 # Extract point clouds for evaluation
                 eval_idx = torch.randint(0, coords_3d.shape[0], (max(coords_3d.shape[0] // 2500, 10), ))
                 pcds.append(coords_3d[eval_idx].cpu().numpy())
 
             if len(mean_3d) == 0:
-                return sam2_time, project_time, compute_mean_cov_time
+                return sam_time, post_time, proj_time, gaussian_time, 0.
 
             mean_3d = np.stack(mean_3d, axis=0)
             cov_3d = np.stack(cov_3d, axis=0)
@@ -132,6 +134,7 @@ class GlobalSG_Gaussian:
                 rels = new_idx[rels[valid_edge_idx]]
 
         else:
+            bboxes = bboxes.astype(int)
             # filter out objects with invalid depth
             invalid_depth = depth[bboxes[:, 1], bboxes[:, 0]] == 0
             classes = classes[~invalid_depth]
@@ -195,12 +198,14 @@ class GlobalSG_Gaussian:
         update_idx = self.global_group.add(classes, mean_3d, cov_3d, rels, rel_classes, pcds)
 
         # Calculate the Hellinger distance and merge objects
+        start = time.time()
         self.global_group.merge(update_idx)
+        merge_time = time.time() - start
 
         if self.visualize:
             self.cur_obj.append({"classes": self.global_group.classes.copy(), "means": self.global_group.means.copy(), "covs": self.global_group.covs.copy()})
             self.cur_rel.append(self.global_group.rels.copy())
 
         if self.use_sam2:
-            return sam2_time, project_time, compute_mean_cov_time
+            return sam_time, post_time, proj_time, gaussian_time, merge_time
         return

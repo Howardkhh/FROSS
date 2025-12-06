@@ -106,6 +106,8 @@ def main(args):
     for idx in tqdm(range(len(imgs)), desc=f"{scene}: "):
         img = imgs[idx]
         classes = obj[idx]["classes"]
+        if len(classes.shape) > 1:
+            classes = classes.argmax(-1)
         means = obj[idx]["means"]
         covs = obj[idx]["covs"]
         rels = rel[idx]

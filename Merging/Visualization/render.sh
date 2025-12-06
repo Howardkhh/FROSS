@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap "echo 'Interrupted! Killing all jobs...'; kill 0" SIGINT
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <dataset_path> <vis_folder>"

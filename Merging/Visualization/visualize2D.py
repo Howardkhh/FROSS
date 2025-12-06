@@ -2,6 +2,7 @@ import argparse
 import pickle
 import os
 from matplotlib.patches import FancyArrowPatch
+import torch
 from tqdm import tqdm
 from PIL import Image
 from classes import *
@@ -126,7 +127,10 @@ def main(args):
         bboxes = obj_2d[idx]
         rels = rel_2d[idx]
         obj_classes = bboxes['classes']
-        obj_boxes = bboxes['bboxes']
+        if isinstance(bboxes['bboxes'], torch.Tensor):
+            obj_boxes = bboxes['bboxes'].cpu().numpy()
+        else:
+            obj_boxes = bboxes['bboxes']
         obj_scores = bboxes['scores']
         rel_classes = rels['rel_classes']
         rels = rels['rels']

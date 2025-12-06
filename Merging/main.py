@@ -82,20 +82,18 @@ def main(args):
 
     # Inference Start
     predictions = {}
-
-    merge_time = 0 # Time taken to merge local scene graphs into global scene graph
-    sam2_total_time = 0 # Time taken for SAM2
-    project_total_time = 0 # Time taken for projecting SAM2 masks to 3D
-    compute_mean_cov_total_time = 0 # Time taken for computing mean and covariance of projected 3D points
     
     obj_time = 0 # Time taken for object detection
     rel_time = 0 # Time taken for relation extraction
+    sam_time = 0 # Time taken for SAM mask prediciton
+    post_time = 0 # Time taken for SAM post-processing
+    proj_time = 0 # Time taken for projecting SAM masks to 3D
+    gaussian_time = 0 # Time taken for computing mean and covariance of projected 3D points
+    merge_time = 0 # Time taken for merging local SG into global SG
     frame_time = 0 # Time taken for processing each frame
     frame_cnt = 0 # Total number of frames processed
     kf_cnt = 0 # Total number of keyframes selected
-    
-    # scan_ids[:10] for testing
-    # for scan_id in tqdm(scan_ids[10:20]):
+
     for scan_id in tqdm(scan_ids):
         # Initialize global scene graph
         if not args.use_kim:
@@ -172,11 +170,6 @@ def main(args):
                 cur_obj_2d.append({"classes": classes, "bboxes": bboxes, "scores": all_scores})
                 cur_rel_2d.append({"rels": rels, "rel_classes": relation_classes})
 
-            # Merge local scene graph into global scene graph
-            start_time = time.time()
-            
-            # input_classes = class_probs if args.use_kim else classes ## ORIGINAL
-            # for passing the class probabilities into merging global SG
             if not args.use_gt_sg:
                 input_classes = class_probs
             else:
@@ -186,17 +179,23 @@ def main(args):
                 one_hot_classes = np.zeros((classes.shape[0], num_obj_classes), dtype=float)
                 one_hot_classes[np.arange(classes.shape[0]), classes] = 1.0
                 input_classes = one_hot_classes
-            
+
+            # Lift and merge local scene graph into global scene graph
             if args.use_kim:
+                start_time = time.time()
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img)
+                merge_time += time.time() - start_time
             elif args.use_sam2:
-                sam2_time, project_time, compute_mean_cov_time = global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img_cuda)
-                sam2_total_time += sam2_time
-                project_total_time += project_time
-                compute_mean_cov_total_time += compute_mean_cov_time
+                frame_sam_time, frame_post_time, frame_proj_time, frame_gaussian_time, frame_merge_time = global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics, img_cuda)
+                sam_time += frame_sam_time
+                post_time += frame_post_time
+                proj_time += frame_proj_time
+                gaussian_time += frame_gaussian_time
+                merge_time += frame_merge_time
             else:
+                start_time = time.time()
                 global_sg.update(input_classes, bboxes, rels, relation_classes, depth, camera_rot, camera_trans, camera_intrinsics)
-            merge_time += time.time() - start_time
+                merge_time += time.time() - start_time
 
             kf_cnt += 1
 
@@ -283,11 +282,12 @@ def main(args):
     obj_time_per_frame = obj_time / frame_cnt # Object detection is done for each frame, not keyframe
     rel_time_per_frame = rel_time / kf_cnt
     print(f"Number of frames: {frame_cnt}, keyframes: {kf_cnt}")
-    print(f"Merge time per frame: {merge_time_per_frame}")
     if args.use_sam2:
-        print(f"SAM2 time per frame: {sam2_total_time / kf_cnt}")
-        print(f"Projection time per frame: {project_total_time / kf_cnt}")
-        print(f"Compute mean/cov time per frame: {compute_mean_cov_total_time / kf_cnt}")
+        print(f"SAM2 time per frame: {sam_time / kf_cnt}")
+        print(f"SAM2 post-processing time per frame: {post_time / kf_cnt}")
+        print(f"Projection time per frame: {proj_time / kf_cnt}")
+        print(f"Compute mean/cov time per frame: {gaussian_time / kf_cnt}")
+    print(f"Merge time per frame: {merge_time_per_frame}")
     print(f"Object time per frame: {obj_time_per_frame}")
     print(f"Relation time per frame: {rel_time_per_frame}")
     print(f"FPS: {frame_cnt / frame_time}")
@@ -303,6 +303,18 @@ def main(args):
         f.write(f"FPS: {frame_cnt / frame_time}\n")
         f.write(f"KF ratio: {kf_cnt / frame_cnt}\n")
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser()
     args.add_argument("--dataset_path", type=str, required=True)
@@ -314,8 +326,8 @@ if __name__ == "__main__":
     args.add_argument("--rel_topk", type=int, default=10)
     args.add_argument("--use_gt_sg", action="store_true", default=False)
     args.add_argument("--not_use_gt_pose", action="store_true", default=False)
-    args.add_argument("--use_sam2", type=bool, default=True, help="Use SAM2.")
-    args.add_argument("--sam2_postprocessing", type=bool, default=True)
+    args.add_argument("--use_sam2", type=str2bool, default=True, help="Use SAM2.")
+    args.add_argument("--sam2_postprocessing", type=str2bool, default=True)
     args.add_argument("--merging_threshold", type=float, default=0.9)
     args.add_argument("--classes_dist_method", type=str, default="dot_product", choices=["kl", "l2", "js", "hellinger", "dot_product", "top_class"])
     args.add_argument("--classes_dist_weight", type=float, default=0.5)
@@ -342,6 +354,10 @@ if __name__ == "__main__":
     args = args.parse_args()
     args.use_gt_pose = not args.not_use_gt_pose
     args.preload = not args.not_preload
+
+    if not args.use_sam2 and args.sam2_postprocessing:
+        print("Warning: SAM2 postprocessing is enabled but SAM2 is not used. Disabling SAM2 postprocessing.")
+        args.sam2_postprocessing = False
 
     assert args.artifact_path is not None or args.use_gt_sg, "Artifact path is required when not using ground truth scene graphs"
 

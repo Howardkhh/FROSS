@@ -36,6 +36,8 @@ def main(args):
 
     assert len(imgs) == len(obj) == len(rel) == len(camera_rot) == len(camera_trans), f"Length mismatch: {len(imgs)}, {len(obj)}, {len(rel)}, {len(camera_rot)}, {len(camera_trans)}"
 
+    is_v2 = False
+
     for idx in tqdm(range(len(imgs)), desc=f"{scene}: "):
         img = imgs[idx]
         pl = pv.Plotter(off_screen=True, window_size=(960, 540))
@@ -46,6 +48,9 @@ def main(args):
         pl.add_mesh(scene_mesh, rgb=True)
 
         classes = obj[idx]["classes"]
+        if len(classes.shape) > 1:
+            classes = classes.argmax(-1)
+            is_v2 = True
         means = obj[idx]["means"]
         covs = obj[idx]["covs"]
 
@@ -56,11 +61,18 @@ def main(args):
             mean = means[i]
             cov = covs[i]
 
+            # # scale up for better visualization
+            if is_v2: cov = cov * 1.5
+
             vals, vecs = np.linalg.eigh(cov)
+            if is_v2 and np.min(vals) < 0.005: # scale if Gaussian is too flat
+                flat_axis = np.argmin(vals)
+                vals[flat_axis]  = 0.005
+                cov = vecs @ np.diag(vals) @ vecs.T
             radii = np.sqrt(vals)            # 1σ radii
-            scale = np.sqrt(2 * np.log(2))   # for half-maximum contour (~1.177)
+            scale = 2 if is_v2 else np.sqrt(2 * np.log(2))   # for half-maximum contour (~1.177)
             radii_scaled = (radii * scale).max()
-            step = max(10, (2*radii_scaled/0.1)) * 1j
+            step = max(50, (2*radii_scaled/0.1)) * 1j
             if (mean[0]-radii_scaled < camera_trans[idx, 0] < mean[0]+radii_scaled) and \
                (mean[1]-radii_scaled < camera_trans[idx, 1] < mean[1]+radii_scaled) and \
                (mean[2]-radii_scaled < camera_trans[idx, 2] < mean[2]+radii_scaled):
@@ -77,12 +89,14 @@ def main(args):
 
             grid = pv.StructuredGrid(x, y, z)
             grid.point_data['pdf'] = pdf_values.flatten(order="F")
-            for iso in np.arange(0.5, 1.0, 0.01):
+            iso_range = np.arange(0.1, 1.0, 0.02) if is_v2 else np.arange(0.05, 1.0, 0.01)
+            opacity_scale = 0.15 if is_v2 else 0.1
+            for iso in iso_range:
                 iso_surface = grid.contour([iso])
                 mesh = iso_surface.extract_geometry()
                 if mesh.n_points == 0:
                     continue
-                pl.add_mesh(mesh, opacity=iso**2*0.1, color=color, lighting=False)
+                pl.add_mesh(mesh, opacity=iso**2*opacity_scale, color=color, lighting=False)
 
         pl.render()
         pl.screenshot(f"{args.vis_folder}/3D/{scene}/{img[:-4]}.png")
