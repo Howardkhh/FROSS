@@ -328,9 +328,9 @@ if __name__ == "__main__":
     args.add_argument("--not_use_gt_pose", action="store_true", default=False)
     args.add_argument("--use_sam2", type=str2bool, default=True, help="Use SAM2.")
     args.add_argument("--sam2_postprocessing", type=str2bool, default=True)
-    args.add_argument("--merging_threshold", type=float, default=0.9)
+    args.add_argument("--merging_threshold", type=float, default=0.7)
     args.add_argument("--classes_dist_method", type=str, default="dot_product", choices=["kl", "l2", "js", "hellinger", "dot_product", "top_class"])
-    args.add_argument("--classes_dist_weight", type=float, default=0.5)
+    args.add_argument("--classes_dist_weight", type=float, default=0.3)
 
     # Debugging arguments
     args.add_argument("--not_preload", action="store_true", default=False, help="Preload all images before each scene. Disable this if you run out of memory. Enable this for runtime evaluation.")
